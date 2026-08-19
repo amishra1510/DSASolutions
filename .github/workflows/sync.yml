@@ -15,7 +15,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,11 +39,19 @@ jobs:
         env:
           LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}
           LEETCODE_CSRF_TOKEN: ${{ secrets.LEETCODE_CSRF_TOKEN }}
-          GIT_AUTHOR_NAME: github-actions[bot]
-          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
-          GIT_COMMITTER_NAME: github-actions[bot]
-          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         run: python scripts/sync.py
+
+      - name: Sync CodeChef
+        env:
+          CODECHEF_USERNAME: ${{ secrets.CODECHEF_USERNAME }}
+          CODECHEF_COOKIE: ${{ secrets.CODECHEF_COOKIE }}
+        run: python scripts/sync_codechef.py
+
+      - name: Sync HackerRank
+        env:
+          HACKERRANK_USERNAME: ${{ secrets.HACKERRANK_USERNAME }}
+          HACKERRANK_COOKIE: ${{ secrets.HACKERRANK_COOKIE }}
+        run: python scripts/sync_hackerrank.py
 
       - name: Verify repository
         run: git status --short
