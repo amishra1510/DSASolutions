@@ -5,10 +5,15 @@ import json
 import os
 import re
 import subprocess
+from http.cookies import SimpleCookie
 from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "submissions.json"
@@ -53,34 +58,145 @@ def difficulty_bucket(rating_text: str) -> str:
 
 def session() -> requests.Session:
     s = requests.Session()
-    s.headers.update({"User-Agent": "Mozilla/5.0 DSASolutions/1.0", "Accept-Language": "en-US,en;q=0.9"})
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+    })
     cookie = os.environ.get("CODECHEF_COOKIE", "").strip()
     if cookie:
         s.headers["Cookie"] = cookie
     return s
 
 
+def browser_cookies(cookie_header: str) -> list[dict]:
+    if not cookie_header:
+        return []
+    parsed = SimpleCookie()
+    try:
+        parsed.load(cookie_header)
+    except Exception:
+        return []
+    cookies = []
+    for morsel in parsed.values():
+        cookies.append({"name": morsel.key, "value": morsel.value, "domain": ".codechef.com", "path": "/"})
+    return cookies
+
+
 def recent_submissions(s: requests.Session, username: str, pages: int = 3) -> list[dict]:
-    found = {}
-    for page in range(pages):
-        url = f"{BASE}/recent/user?user_handle={username}&page={page}"
-        r = s.get(url, timeout=30)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
-        for link in soup.find_all("a", href=True):
-            m = re.search(r"/viewsolution/(\d+)", link["href"])
-            if not m:
+    """Use a real browser because CodeChef renders Recent Activity dynamically."""
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36")
+
+    driver = webdriver.Chrome(options=options)
+    found: dict[str, dict] = {}
+    try:
+        driver.get(f"{BASE}/users/{username}")
+
+        # Apply the supplied CodeChef cookie after the first navigation, if present.
+        cookie_header = os.environ.get("CODECHEF_COOKIE", "").strip()
+        if cookie_header:
+            for c in browser_cookies(cookie_header):
+                try:
+                    driver.add_cookie(c)
+                except Exception:
+                    pass
+            driver.refresh()
+
+        WebDriverWait(driver, 30).until(
+            lambda d: d.find_elements(By.CSS_SELECTOR, "div.widget.recent-activity table.dataTable tr")
+            or d.find_elements(By.CSS_SELECTOR, "table.dataTable tr")
+        )
+
+        selectors = [
+            "div.widget.recent-activity table.dataTable tr",
+            "div.recent-activity table.dataTable tr",
+            "table.dataTable tr",
+        ]
+        rows = []
+        for selector in selectors:
+            rows = driver.find_elements(By.CSS_SELECTOR, selector)
+            if rows:
+                break
+
+        for row in rows:
+            text = row.text.strip()
+            if not text or "Problem" in text and "Result" in text:
                 continue
-            row = link.find_parent("tr")
-            text = row.get_text(" ", strip=True) if row else link.get_text(" ", strip=True)
-            if re.search(r"\bAC\b|Accepted", text, re.I):
-                sid = m.group(1)
-                problem = "Unknown"
-                problem_match = re.search(r"\b([A-Z][A-Z0-9_]{1,20})\b", text)
-                if problem_match:
-                    problem = problem_match.group(1)
-                found[sid] = {"id": sid, "problem": problem, "row": text}
-    return list(found.values())
+
+            # Accepted rows are shown as (100) on CodeChef; also accept explicit Accepted text.
+            if not re.search(r"\(\s*100\s*\)|\bAccepted\b|\bAC\b", text, re.I):
+                continue
+
+            links = row.find_elements(By.TAG_NAME, "a")
+            solution_id = None
+            problem = "Unknown"
+            language = "Unknown"
+
+            for link in links:
+                href = link.get_attribute("href") or ""
+                m = re.search(r"/viewsolution/(\d+)", href)
+                if m:
+                    solution_id = m.group(1)
+                if "/problems/" in href:
+                    m = re.search(r"/problems/([A-Za-z0-9_]+)", href)
+                    if m:
+                        problem = m.group(1)
+                elif "/problem/" in href:
+                    m = re.search(r"/problem[s]?/([A-Za-z0-9_]+)", href)
+                    if m:
+                        problem = m.group(1)
+
+            cells = row.find_elements(By.TAG_NAME, "td")
+            cell_text = [c.text.strip() for c in cells]
+            if cell_text:
+                # Recent Activity columns are: Time, Problem, Result, Lang, Solution.
+                if len(cell_text) >= 4:
+                    language = cell_text[3] or language
+                if problem == "Unknown" and len(cell_text) >= 2:
+                    problem = re.sub(r"\s+", " ", cell_text[1]).strip().split("\n")[0] or "Unknown"
+
+            if solution_id:
+                found[solution_id] = {
+                    "id": solution_id,
+                    "problem": problem,
+                    "language": language,
+                    "row": text,
+                }
+
+        # The profile normally exposes 20 recent rows. If pagination controls exist,
+        # click through a few pages so older accepted submissions are also considered.
+        for _ in range(max(0, pages - 1)):
+            next_buttons = driver.find_elements(By.CSS_SELECTOR, "div.widget.recent-activity a.next, div.widget.recent-activity .pager a:last-child")
+            if not next_buttons:
+                break
+            try:
+                before = len(found)
+                driver.execute_script("arguments[0].click();", next_buttons[0])
+                WebDriverWait(driver, 10).until(lambda d: len(d.find_elements(By.CSS_SELECTOR, "div.widget.recent-activity table.dataTable tr")) > 1)
+                rows = driver.find_elements(By.CSS_SELECTOR, "div.widget.recent-activity table.dataTable tr")
+                for row in rows:
+                    text = row.text.strip()
+                    if not re.search(r"\(\s*100\s*\)|\bAccepted\b|\bAC\b", text, re.I):
+                        continue
+                    for link in row.find_elements(By.TAG_NAME, "a"):
+                        href = link.get_attribute("href") or ""
+                        m = re.search(r"/viewsolution/(\d+)", href)
+                        if m:
+                            sid = m.group(1)
+                            found.setdefault(sid, {"id": sid, "problem": "Unknown", "language": "Unknown", "row": text})
+                if len(found) == before:
+                    break
+            except Exception:
+                break
+
+        return list(found.values())
+    finally:
+        driver.quit()
 
 
 def extract_solution(s: requests.Session, submission_id: str) -> tuple[str, str, str]:
@@ -99,7 +215,6 @@ def extract_solution(s: requests.Session, submission_id: str) -> tuple[str, str,
         if node and len(node.get_text()) > len(code):
             code = node.get_text()
     if not code:
-        # CodeChef may render source in a JS data attribute.
         for node in soup.find_all(attrs={"data-code": True}):
             if len(node.get("data-code", "")) > len(code):
                 code = node.get("data-code", "")
@@ -146,7 +261,7 @@ def main():
             if not code:
                 print(f"[{i}/{len(rows)}] {row['id']}: source unavailable")
                 continue
-            language, ext = language_ext(language_raw)
+            language, ext = language_ext(row.get("language") or language_raw)
             title, (rating, tag) = problem_metadata(s, row["problem"])
             difficulty = difficulty_bucket(rating)
             key = f"codechef::{row['id']}"
