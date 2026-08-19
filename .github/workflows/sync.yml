@@ -47,6 +47,9 @@ jobs:
           CODECHEF_COOKIE: ${{ secrets.CODECHEF_COOKIE }}
         run: python scripts/sync_codechef.py
 
+      - name: Clean CodeChef source files
+        run: python scripts/clean_codechef.py
+
       - name: Sync HackerRank
         env:
           HACKERRANK_USERNAME: ${{ secrets.HACKERRANK_USERNAME }}
