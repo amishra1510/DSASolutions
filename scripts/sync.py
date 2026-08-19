@@ -58,7 +58,7 @@ def make_session() -> requests.Session:
         "Content-Type": "application/json",
         "Origin": "https://leetcode.com",
         "Referer": "https://leetcode.com/problemset/",
-        "User-Agent": "Mozilla/5.0 DSASolutions/5.0",
+        "User-Agent": "Mozilla/5.0 DSASolutions/6.0",
         "X-CSRFToken": csrf,
     })
     s.cookies.set("LEETCODE_SESSION", session_cookie, domain="leetcode.com")
@@ -73,9 +73,7 @@ def gql(session: requests.Session, query: str, variables: dict, operation_name: 
             body = {"query": query, "variables": variables}
             if operation_name:
                 body["operationName"] = operation_name
-            headers = {}
-            if operation_name:
-                headers["x-operation-name"] = operation_name
+            headers = {"x-operation-name": operation_name} if operation_name else {}
             r = session.post(GRAPHQL, json=body, headers=headers, timeout=30)
             r.raise_for_status()
             payload = r.json()
@@ -97,11 +95,13 @@ def verify_login(session: requests.Session) -> str:
 
 
 def fetch_accepted_questions(session: requests.Session) -> list[dict]:
-    """Read the problemset's per-question user status while authenticated.
+    """Use LeetCode's current V2 problemset with the server-side AC filter.
 
-    LeetCode's newer problemsetQuestionListV2 response includes `status` on every
-    question. This is preferable to userProfileQuestions, which currently returns
-    an empty result on some .com deployments even for authenticated accounts.
+    The previous implementation requested every problem and relied on the
+    per-question `status` field. In GitHub Actions that field was null even
+    though authentication was valid, producing 0 AC. The V2 API supports the
+    statusFilter used by the current problemset UI, so ask LeetCode directly
+    for AC questions instead of trying to infer the user's status locally.
     """
     query = """
     query problemsetQuestionListV2($filters: QuestionFilterInput, $limit: Int, $searchKeyword: String, $skip: Int, $sortBy: QuestionSortByInput, $categorySlug: String) {
@@ -128,16 +128,11 @@ def fetch_accepted_questions(session: requests.Session) -> list[dict]:
     }
     """
 
-    questions: list[dict] = []
-    skip = 0
-    page_size = 100
-
-    # Empty filters are intentional: we need the status field for every problem,
-    # then filter locally for AC. This avoids relying on the changing server-side
-    # status-filter enum.
+    # This is the status filter used by the V2 problemset query. Empty arrays
+    # mean "don't filter"; AC asks specifically for accepted questions.
     filters = {
         "filterCombineType": "ALL",
-        "statusFilter": {"questionStatuses": [], "operator": "IS"},
+        "statusFilter": {"questionStatuses": ["AC"], "operator": "IS"},
         "difficultyFilter": {"difficulties": [], "operator": "IS"},
         "languageFilter": {"languageSlugs": [], "operator": "IS"},
         "topicFilter": {"topicSlugs": [], "operator": "IS"},
@@ -153,13 +148,34 @@ def fetch_accepted_questions(session: requests.Session) -> list[dict]:
         "premiumFilter": {"premiumStatus": [], "operator": "IS"},
     }
 
-    while True:
+    result = gql(
+        session,
+        query,
+        {
+            "filters": filters,
+            "limit": 100,
+            "searchKeyword": "",
+            "skip": 0,
+            "sortBy": None,
+            "categorySlug": "",
+        },
+        "problemsetQuestionListV2",
+    )
+    listing = ((result.get("data") or {}).get("problemsetQuestionListV2") or {})
+    first = listing.get("questions") or []
+    total = int(listing.get("totalLength") or 0)
+    print(f"LeetCode AC query returned: {len(first)} problems (server total: {total})")
+
+    questions = list(first)
+    skip = len(first)
+    page = 2
+    while listing.get("hasMore") and skip < total:
         result = gql(
             session,
             query,
             {
                 "filters": filters,
-                "limit": page_size,
+                "limit": 100,
                 "searchKeyword": "",
                 "skip": skip,
                 "sortBy": None,
@@ -169,18 +185,17 @@ def fetch_accepted_questions(session: requests.Session) -> list[dict]:
         )
         listing = ((result.get("data") or {}).get("problemsetQuestionListV2") or {})
         batch = listing.get("questions") or []
-        total = int(listing.get("totalLength") or 0)
         questions.extend(batch)
-
-        ac_in_page = sum(1 for q in batch if str(q.get("status") or "").lower() in {"ac", "accepted", "solved"})
-        print(f"LeetCode problemset page {skip // page_size + 1}: {len(batch)} problems, {ac_in_page} AC")
-
-        skip += len(batch)
-        if not batch or skip >= total or not listing.get("hasMore"):
+        print(f"LeetCode AC query page {page}: {len(batch)} problems")
+        if not batch:
             break
+        skip += len(batch)
+        page += 1
 
-    accepted = [q for q in questions if str(q.get("status") or "").lower() in {"ac", "accepted", "solved"}]
-    print(f"LeetCode problemset records returned: {len(questions)}")
+    # Defensive check: the API should already have filtered these, but keeping
+    # only explicit AC values prevents accidental imports if LeetCode changes
+    # its filter behavior.
+    accepted = [q for q in questions if str(q.get("status") or "").upper() in {"AC", "ACCEPTED", "SOLVED"}]
     print(f"LeetCode accepted problems found: {len(accepted)}")
     return accepted
 
@@ -301,19 +316,7 @@ def main() -> None:
             language = canonical_language((detail.get("lang") or {}).get("name") or sub.get("lang") or "Unknown")
             tags = tuple(t.get("name") for t in q.get("topicTags") or [] if t.get("name"))
             difficulty = q.get("difficulty") if q.get("difficulty") in {"Easy", "Medium", "Hard"} else None
-
-            s = Submission(
-                "LeetCode",
-                str(q.get("questionFrontendId") or slug),
-                q.get("title") or slug,
-                slug,
-                language,
-                detail["code"],
-                str(detail.get("timestamp") or sub.get("timestamp") or ""),
-                difficulty,
-                tags,
-                str(sub["id"]),
-            )
+            s = Submission("LeetCode", str(q.get("questionFrontendId") or slug), q.get("title") or slug, slug, language, detail["code"], str(detail.get("timestamp") or sub.get("timestamp") or ""), difficulty, tags, str(sub["id"]))
             found += 1
 
             if s.key in records:
@@ -321,12 +324,7 @@ def main() -> None:
                 continue
 
             path = write_submission(s)
-            records[s.key] = {
-                **asdict(s),
-                "tags": list(s.tags),
-                "source_hash": s.source_hash,
-                "solution_path": str(path.relative_to(ROOT)),
-            }
+            records[s.key] = {**asdict(s), "tags": list(s.tags), "source_hash": s.source_hash, "solution_path": str(path.relative_to(ROOT))}
             added += 1
             print(f"[{index}/{len(questions)}] {slug}: synced -> {path.relative_to(ROOT)}")
         except Exception as exc:
