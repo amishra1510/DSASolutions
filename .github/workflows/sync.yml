@@ -56,5 +56,18 @@ jobs:
           HACKERRANK_COOKIE: ${{ secrets.HACKERRANK_COOKIE }}
         run: python scripts/sync_hackerrank.py
 
+      - name: Update progress dashboard
+        run: python scripts/update_dashboard.py
+
+      - name: Commit dashboard
+        run: |
+          if git diff --quiet README.md; then
+            echo "Dashboard is already up to date."
+          else
+            git add README.md
+            git commit -m "docs: update progress dashboard"
+            git push
+          fi
+
       - name: Verify repository
         run: git status --short
