@@ -15,5 +15,57 @@
     "submission_id": "2112867140",
     "source_hash": "2736e0b356d3902a053d06f69d1c4cd90b8377edb41e38d08d84042cb928118f",
     "solution_path": "LeetCode/C/Array/Easy/1-Two-Sum.cpp"
+  },
+  "codechef::1343544183": {
+    "platform": "CodeChef",
+    "submission_id": "1343544183",
+    "problem_id": "DSACPR53",
+    "title": "Traversal of 2d arrays Practice Coding Problem",
+    "language": "C++",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "CodeChef/C/Other/Unknown/DSACPR53-Traversal-of-2d-arrays-Practice-Coding-Problem.cpp",
+    "source_hash": "206b324c2b969d0edbbdda285093421716390a8b47fa790bb89a78326e348ea0"
+  },
+  "codechef::1343544136": {
+    "platform": "CodeChef",
+    "submission_id": "1343544136",
+    "problem_id": "DSACPR53",
+    "title": "Traversal of 2d arrays Practice Coding Problem",
+    "language": "C++",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "CodeChef/C/Other/Unknown/DSACPR53-Traversal-of-2d-arrays-Practice-Coding-Problem.cpp",
+    "source_hash": "206b324c2b969d0edbbdda285093421716390a8b47fa790bb89a78326e348ea0"
+  },
+  "codechef::1343432752": {
+    "platform": "CodeChef",
+    "submission_id": "1343432752",
+    "problem_id": "DSACPR38",
+    "title": "Declaring string arrays Practice Coding Problem",
+    "language": "C++",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "CodeChef/C/Other/Unknown/DSACPR38-Declaring-string-arrays-Practice-Coding-Problem.cpp",
+    "source_hash": "86b1ee19b3fdd7d322d662419337587177c135d73126502799eeba12d7c905bd"
+  },
+  "codechef::1343432317": {
+    "platform": "CodeChef",
+    "submission_id": "1343432317",
+    "problem_id": "DSACPR37",
+    "title": "Creating Arrays Practice Coding Problem",
+    "language": "C++",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "CodeChef/C/Other/Unknown/DSACPR37-Creating-Arrays-Practice-Coding-Problem.cpp",
+    "source_hash": "3558f6c633dd02f496dd9a0692e4a928a73824fdd86a2873a899781f8587e588"
   }
 }
