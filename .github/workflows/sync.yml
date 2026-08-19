@@ -1,0 +1,40 @@
+name: Sync DSA Solutions
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "7,27,47 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dsa-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Sync LeetCode
+        env:
+          LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}
+          LEETCODE_CSRF_TOKEN: ${{ secrets.LEETCODE_CSRF_TOKEN }}
+        run: python scripts/sync.py
+
+      - name: Verify repository
+        run: git status --short
