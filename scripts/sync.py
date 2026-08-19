@@ -54,14 +54,16 @@ def make_session() -> requests.Session:
         raise RuntimeError("Missing LEETCODE_SESSION or LEETCODE_CSRF_TOKEN")
 
     s = requests.Session()
+    # Send the exact cookie/header combination used by LeetCode's authenticated
+    # GraphQL requests. Do not print either secret to Actions logs.
     s.cookies.set("LEETCODE_SESSION", cookie, domain="leetcode.com")
     s.cookies.set("csrftoken", csrf, domain="leetcode.com")
     s.headers.update({
         "Content-Type": "application/json",
         "Accept": "application/json",
         "Origin": "https://leetcode.com",
-        "Referer": "https://leetcode.com/",
-        "User-Agent": "Mozilla/5.0 DSASolutions/7.0",
+        "Referer": "https://leetcode.com/progress/",
+        "User-Agent": "Mozilla/5.0 DSASolutions/8.0",
         "X-CSRFToken": csrf,
     })
     return s
@@ -76,7 +78,8 @@ def gql(s: requests.Session, query: str, variables: dict, operation: str) -> dic
             response.raise_for_status()
             data = response.json()
             if data.get("errors"):
-                raise RuntimeError("; ".join(str(e.get("message", "GraphQL error")) for e in data["errors"]))
+                messages = "; ".join(str(e.get("message", "GraphQL error")) for e in data["errors"])
+                raise RuntimeError(messages)
             return data
         except Exception as exc:
             last = exc
@@ -93,27 +96,143 @@ def verify_login(s: requests.Session) -> str:
     return status.get("username") or "unknown"
 
 
-def fetch_recent_accepted(s: requests.Session, username: str) -> list[dict]:
-    """Return LeetCode's own accepted-submission feed.
-
-    IMPORTANT: recentAcSubmissionList is already an AC-only feed. Older versions
-    of this script incorrectly treated these records like generic submissions and
-    filtered on a missing statusDisplay field, turning valid AC records into zero.
-    """
+def fetch_profile_stats(s: requests.Session, username: str) -> int:
+    """Get LeetCode's own solved count before attempting the detailed list."""
     query = """
-    query recentAcSubmissions($username: String!, $limit: Int!) {
-      recentAcSubmissionList(username: $username, limit: $limit) {
-        id
-        title
-        titleSlug
-        timestamp
+    query userSessionProgress($username: String!) {
+      matchedUser(username: $username) {
+        submitStats {
+          acSubmissionNum { difficulty count submissions }
+        }
       }
     }
     """
-    result = gql(s, query, {"username": username, "limit": 100}, "recentAcSubmissions")
+    result = gql(s, query, {"username": username}, "userSessionProgress")
+    rows = (((result.get("data") or {}).get("matchedUser") or {}).get("submitStats") or {}).get("acSubmissionNum") or []
+    for row in rows:
+        if row.get("difficulty") == "All":
+            return int(row.get("count") or 0)
+    return 0
+
+
+def fetch_accepted_questions(s: requests.Session) -> list[dict]:
+    """Fetch the authenticated user's solved-question list.
+
+    `userProfileQuestions(status: ACCEPTED, ...)` is the progress endpoint used
+    by current LeetCode tooling. It returns the actual questions the account has
+    accepted, unlike the public problemset list whose `status` can be null.
+    """
+    query = """
+    query userProfileQuestions(
+      $status: StatusFilterEnum!,
+      $skip: Int!,
+      $first: Int!,
+      $sortField: SortFieldEnum!,
+      $sortOrder: SortingOrderEnum!,
+      $keyword: String,
+      $difficulty: [DifficultyEnum!]
+    ) {
+      userProfileQuestions(
+        status: $status,
+        skip: $skip,
+        first: $first,
+        sortField: $sortField,
+        sortOrder: $sortOrder,
+        keyword: $keyword,
+        difficulty: $difficulty
+      ) {
+        totalNum
+        questions {
+          frontendId
+          titleSlug
+          title
+          difficulty
+          lastSubmittedAt
+          numSubmitted
+        }
+      }
+    }
+    """
+
+    result = gql(
+        s,
+        query,
+        {
+            "status": "ACCEPTED",
+            "skip": 0,
+            "first": 2000,
+            "sortField": "LAST_SUBMITTED_AT",
+            "sortOrder": "DESCENDING",
+            "keyword": "",
+            "difficulty": [],
+        },
+        "userProfileQuestions",
+    )
+    listing = ((result.get("data") or {}).get("userProfileQuestions") or {})
+    questions = listing.get("questions") or []
+    total = int(listing.get("totalNum") or len(questions))
+    print(f"LeetCode accepted-question endpoint: {len(questions)} returned (total: {total})")
+    return questions
+
+
+def fetch_recent_accepted(s: requests.Session, username: str) -> list[dict]:
+    """Fallback for accounts where the progress endpoint is unavailable."""
+    query = """
+    query recentAcSubmissions($username: String!, $limit: Int!) {
+      recentAcSubmissionList(username: $username, limit: $limit) {
+        id title titleSlug timestamp
+      }
+    }
+    """
+    result = gql(s, query, {"username": username, "limit": 20}, "recentAcSubmissions")
     rows = ((result.get("data") or {}).get("recentAcSubmissionList") or [])
-    print(f"LeetCode recent AC submissions returned: {len(rows)}")
+    print(f"LeetCode recent AC fallback: {len(rows)} submissions")
     return rows
+
+
+def fetch_submission_list(s: requests.Session, slug: str) -> dict | None:
+    """Get the newest accepted submission for one solved problem."""
+    query = """
+    query submissions($offset: Int!, $limit: Int!, $lastKey: String, $questionSlug: String!) {
+      submissionList(
+        offset: $offset,
+        limit: $limit,
+        lastKey: $lastKey,
+        questionSlug: $questionSlug
+      ) {
+        lastKey
+        hasNext
+        submissions {
+          id
+          statusDisplay
+          lang
+          timestamp
+        }
+      }
+    }
+    """
+    result = gql(
+        s,
+        query,
+        {"offset": 0, "limit": 40, "lastKey": None, "questionSlug": slug},
+        "submissions",
+    )
+    return ((result.get("data") or {}).get("submissionList") or None)
+
+
+def fetch_submission_source(s: requests.Session, submission_id: int) -> dict | None:
+    query = """
+    query submissionDetails($submissionId: Int!) {
+      submissionDetails(submissionId: $submissionId) {
+        code
+        timestamp
+        lang { name langSlug }
+        statusCode
+      }
+    }
+    """
+    result = gql(s, query, {"submissionId": submission_id}, "submissionDetails")
+    return ((result.get("data") or {}).get("submissionDetails") or None)
 
 
 def fetch_question(s: requests.Session, slug: str) -> dict:
@@ -131,21 +250,6 @@ def fetch_question(s: requests.Session, slug: str) -> dict:
     """
     result = gql(s, query, {"titleSlug": slug}, "questionTitle")
     return ((result.get("data") or {}).get("question") or {})
-
-
-def fetch_submission_source(s: requests.Session, submission_id: int) -> dict | None:
-    query = """
-    query submissionDetails($submissionId: Int!) {
-      submissionDetails(submissionId: $submissionId) {
-        code
-        timestamp
-        lang { name langSlug }
-        statusCode
-      }
-    }
-    """
-    result = gql(s, query, {"submissionId": submission_id}, "submissionDetails")
-    return ((result.get("data") or {}).get("submissionDetails") or None)
 
 
 def canonical_language(value: str) -> str:
@@ -213,33 +317,50 @@ def main() -> None:
     username = verify_login(s)
     print(f"LeetCode authenticated user: {username}")
 
-    accepted = fetch_recent_accepted(s, username)
+    profile_solved = fetch_profile_stats(s, username)
+    print(f"LeetCode profile reports {profile_solved} accepted problems")
+
+    questions = fetch_accepted_questions(s)
+    fallback = False
+    if not questions and profile_solved > 0:
+        print("LeetCode progress endpoint returned 0 despite a non-zero solved count; using recent-AC fallback.")
+        questions = fetch_recent_accepted(s, username)
+        fallback = True
+
+    if profile_solved > 0 and not questions:
+        raise RuntimeError(
+            "LeetCode says this account has accepted problems, but both authenticated "
+            "problem-progress and recent-AC endpoints returned zero. The LeetCode API "
+            "response changed or the session lacks progress access; refusing to report a false success."
+        )
+
     found = 0
     added = 0
 
-    for index, item in enumerate(accepted, 1):
+    for index, item in enumerate(questions, 1):
         slug = item.get("titleSlug")
         if not slug:
             continue
         try:
             question = fetch_question(s, slug)
             if not question:
-                print(f"[{index}/{len(accepted)}] {slug}: question metadata unavailable")
+                print(f"[{index}/{len(questions)}] {slug}: question metadata unavailable")
                 continue
 
-            detail = fetch_submission_source(s, int(item["id"]))
+            listing = fetch_submission_list(s, slug)
+            submissions = (listing or {}).get("submissions") or []
+            accepted_sub = next((x for x in submissions if str(x.get("statusDisplay", "")).lower() in {"accepted", "ac"}), None)
+            if not accepted_sub:
+                print(f"[{index}/{len(questions)}] {slug}: no accepted submission returned")
+                continue
+
+            detail = fetch_submission_source(s, int(accepted_sub["id"]))
             if not detail or not detail.get("code"):
-                print(f"[{index}/{len(accepted)}] {slug}: source unavailable")
-                continue
-
-            # recentAcSubmissionList is AC-only. We only additionally guard
-            # against an unexpected non-10 detail response when the field exists.
-            if detail.get("statusCode") is not None and int(detail["statusCode"]) != 10:
-                print(f"[{index}/{len(accepted)}] {slug}: submission is not accepted")
+                print(f"[{index}/{len(questions)}] {slug}: source unavailable")
                 continue
 
             tags = tuple(t.get("name") for t in question.get("topicTags") or [] if t.get("name"))
-            lang = canonical_language((detail.get("lang") or {}).get("name") or "Unknown")
+            lang = canonical_language((detail.get("lang") or {}).get("name") or accepted_sub.get("lang") or "Unknown")
             difficulty = question.get("difficulty") if question.get("difficulty") in {"Easy", "Medium", "Hard"} else None
 
             solution = Submission(
@@ -249,15 +370,15 @@ def main() -> None:
                 slug=slug,
                 language=lang,
                 source=detail["code"],
-                accepted_at=str(detail.get("timestamp") or item.get("timestamp") or ""),
+                accepted_at=str(detail.get("timestamp") or accepted_sub.get("timestamp") or item.get("timestamp") or ""),
                 difficulty=difficulty,
                 tags=tags,
-                submission_id=str(item["id"]),
+                submission_id=str(accepted_sub["id"]),
             )
             found += 1
 
             if solution.key in records:
-                print(f"[{index}/{len(accepted)}] {slug}: already synced")
+                print(f"[{index}/{len(questions)}] {slug}: already synced")
                 continue
 
             path = write_solution(solution)
@@ -268,13 +389,15 @@ def main() -> None:
                 "solution_path": str(path.relative_to(ROOT)),
             }
             added += 1
-            print(f"[{index}/{len(accepted)}] {slug}: synced -> {path.relative_to(ROOT)}")
+            print(f"[{index}/{len(questions)}] {slug}: synced -> {path.relative_to(ROOT)}")
         except Exception as exc:
-            print(f"[{index}/{len(accepted)}] {slug}: ERROR: {exc}")
+            print(f"[{index}/{len(questions)}] {slug}: ERROR: {exc}")
 
     save_records(records)
     update_dashboard(records)
     print(f"LeetCode accepted solutions found: {found}; added: {added}")
+    if fallback:
+        print("NOTE: this run used the recent-AC fallback; full historical backfill requires the progress endpoint.")
 
     if added:
         git("add", ".")
