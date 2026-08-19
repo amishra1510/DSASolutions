@@ -76,14 +76,13 @@ def browser_cookies(cookie_header: str) -> list[dict]:
         parsed.load(cookie_header)
     except Exception:
         return []
-    cookies = []
-    for morsel in parsed.values():
-        cookies.append({"name": morsel.key, "value": morsel.value, "domain": ".codechef.com", "path": "/"})
-    return cookies
+    return [
+        {"name": morsel.key, "value": morsel.value, "domain": ".codechef.com", "path": "/"}
+        for morsel in parsed.values()
+    ]
 
 
-def recent_submissions(s: requests.Session, username: str, pages: int = 3) -> list[dict]:
-    """Use a real browser because CodeChef renders Recent Activity dynamically."""
+def make_driver():
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -91,21 +90,28 @@ def recent_submissions(s: requests.Session, username: str, pages: int = 3) -> li
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36")
+    return webdriver.Chrome(options=options)
 
-    driver = webdriver.Chrome(options=options)
+
+def add_cookie_auth(driver):
+    cookie_header = os.environ.get("CODECHEF_COOKIE", "").strip()
+    if not cookie_header:
+        return
+    for cookie in browser_cookies(cookie_header):
+        try:
+            driver.add_cookie(cookie)
+        except Exception:
+            pass
+
+
+def recent_submissions(s: requests.Session, username: str, pages: int = 3) -> list[dict]:
+    """Use a real browser because CodeChef renders Recent Activity dynamically."""
+    driver = make_driver()
     found: dict[str, dict] = {}
     try:
         driver.get(f"{BASE}/users/{username}")
-
-        # Apply the supplied CodeChef cookie after the first navigation, if present.
-        cookie_header = os.environ.get("CODECHEF_COOKIE", "").strip()
-        if cookie_header:
-            for c in browser_cookies(cookie_header):
-                try:
-                    driver.add_cookie(c)
-                except Exception:
-                    pass
-            driver.refresh()
+        add_cookie_auth(driver)
+        driver.refresh()
 
         WebDriverWait(driver, 30).until(
             lambda d: d.find_elements(By.CSS_SELECTOR, "div.widget.recent-activity table.dataTable tr")
@@ -125,10 +131,8 @@ def recent_submissions(s: requests.Session, username: str, pages: int = 3) -> li
 
         for row in rows:
             text = row.text.strip()
-            if not text or "Problem" in text and "Result" in text:
+            if not text or ("Problem" in text and "Result" in text):
                 continue
-
-            # Accepted rows are shown as (100) on CodeChef; also accept explicit Accepted text.
             if not re.search(r"\(\s*100\s*\)|\bAccepted\b|\bAC\b", text, re.I):
                 continue
 
@@ -136,7 +140,6 @@ def recent_submissions(s: requests.Session, username: str, pages: int = 3) -> li
             solution_id = None
             problem = "Unknown"
             language = "Unknown"
-
             for link in links:
                 href = link.get_attribute("href") or ""
                 m = re.search(r"/viewsolution/(\d+)", href)
@@ -154,7 +157,6 @@ def recent_submissions(s: requests.Session, username: str, pages: int = 3) -> li
             cells = row.find_elements(By.TAG_NAME, "td")
             cell_text = [c.text.strip() for c in cells]
             if cell_text:
-                # Recent Activity columns are: Time, Problem, Result, Lang, Solution.
                 if len(cell_text) >= 4:
                     language = cell_text[3] or language
                 if problem == "Unknown" and len(cell_text) >= 2:
@@ -168,57 +170,91 @@ def recent_submissions(s: requests.Session, username: str, pages: int = 3) -> li
                     "row": text,
                 }
 
-        # The profile normally exposes 20 recent rows. If pagination controls exist,
-        # click through a few pages so older accepted submissions are also considered.
-        for _ in range(max(0, pages - 1)):
-            next_buttons = driver.find_elements(By.CSS_SELECTOR, "div.widget.recent-activity a.next, div.widget.recent-activity .pager a:last-child")
-            if not next_buttons:
-                break
-            try:
-                before = len(found)
-                driver.execute_script("arguments[0].click();", next_buttons[0])
-                WebDriverWait(driver, 10).until(lambda d: len(d.find_elements(By.CSS_SELECTOR, "div.widget.recent-activity table.dataTable tr")) > 1)
-                rows = driver.find_elements(By.CSS_SELECTOR, "div.widget.recent-activity table.dataTable tr")
-                for row in rows:
-                    text = row.text.strip()
-                    if not re.search(r"\(\s*100\s*\)|\bAccepted\b|\bAC\b", text, re.I):
-                        continue
-                    for link in row.find_elements(By.TAG_NAME, "a"):
-                        href = link.get_attribute("href") or ""
-                        m = re.search(r"/viewsolution/(\d+)", href)
-                        if m:
-                            sid = m.group(1)
-                            found.setdefault(sid, {"id": sid, "problem": "Unknown", "language": "Unknown", "row": text})
-                if len(found) == before:
-                    break
-            except Exception:
-                break
-
         return list(found.values())
     finally:
         driver.quit()
 
 
 def extract_solution(s: requests.Session, submission_id: str) -> tuple[str, str, str]:
-    r = s.get(f"{BASE}/viewsolution/{submission_id}", timeout=30)
-    r.raise_for_status()
-    soup = BeautifulSoup(r.text, "html.parser")
-    text = soup.get_text(" ", strip=True)
-    language = "Unknown"
-    for candidate in ("C++", "C", "Python", "Java", "JavaScript", "Go", "Rust"):
-        if candidate.lower() in text.lower():
-            language = candidate
-            break
-    code = ""
-    for selector in ("pre", "code", "textarea"):
-        node = soup.select_one(selector)
-        if node and len(node.get_text()) > len(code):
-            code = node.get_text()
-    if not code:
-        for node in soup.find_all(attrs={"data-code": True}):
-            if len(node.get("data-code", "")) > len(code):
-                code = node.get("data-code", "")
-    return code.strip(), language, text
+    """Extract source from the rendered CodeChef View Solution page.
+
+    CodeChef currently renders the source client-side, so a plain requests GET
+    can return the page without the actual source. Selenium is used here too,
+    with the same authenticated cookie as the profile scraper.
+    """
+    driver = make_driver()
+    try:
+        driver.get(f"{BASE}/viewsolution/{submission_id}")
+        add_cookie_auth(driver)
+        driver.refresh()
+
+        WebDriverWait(driver, 30).until(
+            lambda d: d.find_elements(By.CSS_SELECTOR, "pre, code, textarea, .CodeMirror-code, .cm-content, .ace_text-layer")
+        )
+
+        # Prefer elements that are normally dedicated to source code.
+        selectors = [
+            "pre",
+            ".CodeMirror-code",
+            ".cm-content",
+            ".ace_text-layer",
+            "textarea",
+            "code",
+            "[class*='source-code']",
+            "[class*='source_code']",
+            "[class*='code-container']",
+            "[class*='code-container'] *",
+        ]
+
+        candidates = []
+        for selector in selectors:
+            for element in driver.find_elements(By.CSS_SELECTOR, selector):
+                try:
+                    text = element.text or element.get_attribute("value") or element.get_attribute("textContent") or ""
+                except Exception:
+                    continue
+                text = text.strip()
+                if len(text) < 20:
+                    continue
+                candidates.append(text)
+
+        # Also inspect elements whose class/id explicitly mentions source/code.
+        for element in driver.find_elements(By.CSS_SELECTOR, "[class*='code'], [id*='code'], [class*='source'], [id*='source']"):
+            try:
+                text = element.text or element.get_attribute("value") or element.get_attribute("textContent") or ""
+            except Exception:
+                continue
+            text = text.strip()
+            if len(text) >= 20:
+                candidates.append(text)
+
+        # Score candidates so the actual source wins over page/UI text.
+        unique = list(dict.fromkeys(candidates))
+        code_markers = [
+            "#include", "using namespace", "int main", "class Solution", "public:",
+            "private:", "return ", "def ", "import ", "#include", "System.out",
+            "console.log", "fn main", "package main", "{", ";",
+        ]
+
+        def score(text: str) -> int:
+            lines = text.count("\n") + 1
+            marker_hits = sum(text.count(marker) for marker in code_markers)
+            return min(len(text), 20000) + marker_hits * 1000 + min(lines, 200) * 10
+
+        code = max(unique, key=score) if unique else ""
+        code = code.strip()
+
+        # Determine language from visible page text.
+        page_text = driver.find_element(By.TAG_NAME, "body").text
+        language = "Unknown"
+        for candidate in ("C++", "C", "Python", "Java", "JavaScript", "Go", "Rust"):
+            if re.search(rf"\b{re.escape(candidate)}\b", page_text, re.I):
+                language = candidate
+                break
+
+        return code, language, page_text
+    finally:
+        driver.quit()
 
 
 def problem_metadata(s: requests.Session, problem: str) -> tuple[str, str]:
@@ -235,7 +271,8 @@ def problem_metadata(s: requests.Session, problem: str) -> tuple[str, str]:
             txt = parent.parent.get_text(" ", strip=True) if parent.parent else parent.get_text(" ", strip=True)
             m = re.search(r"\b([0-9]{2,4})\b", txt)
             if m:
-                rating = m.group(1); break
+                rating = m.group(1)
+                break
     tags = []
     for a in soup.find_all("a", href=True):
         if "/tags/" in a["href"]:
@@ -271,7 +308,17 @@ def main():
             path = ROOT / "CodeChef" / safe(language) / safe(tag) / safe(difficulty) / f"{safe(row['problem'])}-{safe(title)}.{ext}"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(code + "\n", encoding="utf-8")
-            records[key] = {"platform":"CodeChef","submission_id":row["id"],"problem_id":row["problem"],"title":title,"language":language,"difficulty":difficulty,"tags":[tag],"solution_path":str(path.relative_to(ROOT)),"source_hash":hashlib.sha256(code.encode()).hexdigest()}
+            records[key] = {
+                "platform": "CodeChef",
+                "submission_id": row["id"],
+                "problem_id": row["problem"],
+                "title": title,
+                "language": language,
+                "difficulty": difficulty,
+                "tags": [tag],
+                "solution_path": str(path.relative_to(ROOT)),
+                "source_hash": hashlib.sha256(code.encode()).hexdigest(),
+            }
             added += 1
             print(f"[{i}/{len(rows)}] {row['problem']}: synced -> {path.relative_to(ROOT)}")
         except Exception as exc:
