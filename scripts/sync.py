@@ -59,7 +59,7 @@ def make_session() -> requests.Session:
         "Content-Type": "application/json",
         "Origin": "https://leetcode.com",
         "Referer": "https://leetcode.com/",
-        "User-Agent": "Mozilla/5.0 DSASolutions/3.0",
+        "User-Agent": "Mozilla/5.0 DSASolutions/3.1",
         "X-CSRFToken": csrf,
     })
     s.cookies.set("LEETCODE_SESSION", session_cookie, domain="leetcode.com")
@@ -149,8 +149,10 @@ def fetch_latest_accepted_submission(session: requests.Session, slug: str) -> di
 def fetch_submission_source(session: requests.Session, submission_id: int) -> dict | None:
     query = """
     query submissionDetails($submissionId: Int!) {
-      submissionDetails($submissionId: $submissionId) {
-        code timestamp statusCode
+      submissionDetails(submissionId: $submissionId) {
+        code
+        timestamp
+        statusCode
         lang { name langSlug }
       }
     }
