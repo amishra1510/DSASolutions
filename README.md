@@ -1,22 +1,11 @@
 # DSA Solutions
 
-Automated archive for accepted competitive-programming solutions.
+Automated accepted-submission archive for LeetCode, CodeChef and HackerRank.
 
-## Platforms
+## Progress
+**1 synced** — Easy: 1 · Medium: 0 · Hard: 0
 
-- LeetCode
-- CodeChef
-- HackerRank
+## Layout
+`LeetCode / Language / Topic / Difficulty / Problem.cpp`
 
-## Structure
-
-```text
-DSASolutions/
-├── LeetCode/
-├── CodeChef/
-├── HackerRank/
-├── scripts/
-└── .github/workflows/
-```
-
-The repository will automatically import accepted submissions, organize them by platform/problem/difficulty, avoid duplicate imports, and maintain a progress dashboard.
+Accepted LeetCode submissions are synchronized by GitHub Actions.

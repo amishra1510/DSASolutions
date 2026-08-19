@@ -1,1 +1,19 @@
-{}
+{
+  "leetcode::1::c++": {
+    "platform": "LeetCode",
+    "problem_id": "1",
+    "title": "Two Sum",
+    "slug": "two-sum",
+    "language": "C++",
+    "source": "class Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        unordered_map<int, int>mp;\n\n        for(int i = 0; i<nums.size(); i++){\n            int need  = target -nums[i];\n\n            if(mp.find(need) != mp.end()){\n                return {mp[need], i};\n            }\n            mp[nums[i]] =i;\n        }\n        return{};\n        \n    }\n};",
+    "accepted_at": "1787153279",
+    "difficulty": "Easy",
+    "tags": [
+      "Array",
+      "Hash Table"
+    ],
+    "submission_id": "2112867140",
+    "source_hash": "2736e0b356d3902a053d06f69d1c4cd90b8377edb41e38d08d84042cb928118f",
+    "solution_path": "LeetCode/C/Array/Easy/1-Two-Sum.cpp"
+  }
+}
