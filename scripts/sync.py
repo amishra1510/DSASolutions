@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "submissions.json"
 LEETCODE = "https://leetcode.com/graphql"
 
+
 @dataclass(frozen=True)
 class Submission:
     platform: str
@@ -51,90 +52,133 @@ def leetcode_request(query: str, variables: dict | None = None) -> dict:
     csrf = os.environ.get("LEETCODE_CSRF_TOKEN")
     if not session or not csrf:
         raise RuntimeError("Missing LEETCODE_SESSION or LEETCODE_CSRF_TOKEN")
+
     body = json.dumps({"query": query, "variables": variables or {}}).encode()
-    req = urllib.request.Request(LEETCODE, data=body, method="POST", headers={
-        "Content-Type": "application/json", "Accept": "application/json",
-        "Origin": "https://leetcode.com", "Referer": "https://leetcode.com/",
-        "x-csrftoken": csrf, "Cookie": f"LEETCODE_SESSION={session}; csrftoken={csrf}",
-        "User-Agent": "Mozilla/5.0 DSASolutions/1.2",
-    })
+    req = urllib.request.Request(
+        LEETCODE,
+        data=body,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://leetcode.com",
+            "Referer": "https://leetcode.com/",
+            "x-csrftoken": csrf,
+            "Cookie": f"LEETCODE_SESSION={session}; csrftoken={csrf}",
+            "User-Agent": "Mozilla/5.0 DSASolutions/2.0",
+        },
+    )
     try:
         with urllib.request.urlopen(req, timeout=30) as response:
             result = json.load(response)
     except urllib.error.HTTPError as exc:
         raise RuntimeError(f"LeetCode HTTP {exc.code}") from exc
+
     if result.get("errors"):
-        raise RuntimeError("LeetCode GraphQL returned an error")
+        raise RuntimeError(f"LeetCode GraphQL error: {result['errors'][0].get('message', 'unknown error')}")
     return result
 
 
-def fetch_leetcode(limit: int = 100) -> list[Submission]:
-    """Fetch the authenticated submission history with lastKey pagination.
+def fetch_accepted_problems() -> list[dict]:
+    """Get the authenticated user's solved problems.
 
-    LeetCode may return only a small first page even when a larger limit is
-    requested. We therefore follow lastKey/hasNext until the history is exhausted.
-    For each accepted submission we fetch its source and question metadata.
+    This avoids the unreliable global submissionList endpoint. LeetCode exposes
+    the authenticated solved-question list through userProfileQuestions; we then
+    ask questionSubmissionList for the latest accepted submission of each problem.
     """
     status = leetcode_request("query { userStatus { isSignedIn username } }")
     user = (status.get("data") or {}).get("userStatus") or {}
     if not user.get("isSignedIn") or not user.get("username"):
         raise RuntimeError("LeetCode authentication rejected or username unavailable")
 
-    query = """query submissions($offset: Int!, $limit: Int!, $lastKey: String, $questionSlug: String) {
-      submissionList(offset: $offset, limit: $limit, lastKey: $lastKey, questionSlug: $questionSlug) {
+    print(f"LeetCode authenticated user: {user['username']}")
+
+    query = """query userProfileQuestions($status: StatusFilterEnum!, $skip: Int!, $first: Int!, $sortField: SortFieldEnum!, $sortOrder: SortingOrderEnum!, $keyword: String, $difficulty: [DifficultyEnum!]) {
+      userProfileQuestions(
+        status: $status
+        skip: $skip
+        first: $first
+        sortField: $sortField
+        sortOrder: $sortOrder
+        keyword: $keyword
+        difficulty: $difficulty
+      ) {
+        totalNum
+        questions {
+          questionFrontendId
+          titleSlug
+          title
+          difficulty
+          topicTags { name slug }
+          lastSubmittedAt
+        }
+      }
+    }"""
+
+    questions: list[dict] = []
+    skip = 0
+    page_size = 100
+
+    while True:
+        result = leetcode_request(query, {
+            "status": "ACCEPTED",
+            "skip": skip,
+            "first": page_size,
+            "sortField": "LAST_SUBMITTED_AT",
+            "sortOrder": "DESCENDING",
+            "keyword": None,
+            "difficulty": [],
+        })
+        data = ((result.get("data") or {}).get("userProfileQuestions") or {})
+        batch = data.get("questions") or []
+        total = int(data.get("totalNum") or len(batch))
+        questions.extend(batch)
+        print(f"LeetCode solved problems page {skip // page_size + 1}: {len(batch)} (total reported: {total})")
+        skip += len(batch)
+        if not batch or skip >= total:
+            break
+
+    return questions
+
+
+def fetch_latest_accepted(question_slug: str) -> dict | None:
+    """Return the newest accepted submission for one problem."""
+    query = """query questionSubmissionList($offset: Int!, $limit: Int!, $lastKey: String, $questionSlug: String!, $lang: Int, $status: Int) {
+      questionSubmissionList(
+        offset: $offset
+        limit: $limit
+        lastKey: $lastKey
+        questionSlug: $questionSlug
+        lang: $lang
+        status: $status
+      ) {
         lastKey
         hasNext
         submissions {
           id
+          titleSlug
+          status
           statusDisplay
           lang
           timestamp
         }
       }
     }"""
+    result = leetcode_request(query, {
+        "offset": 0,
+        "limit": 1,
+        "lastKey": None,
+        "questionSlug": question_slug,
+        "lang": None,
+        "status": 10,
+    })
+    data = ((result.get("data") or {}).get("questionSubmissionList") or {})
+    submissions = data.get("submissions") or []
+    return submissions[0] if submissions else None
 
-    print(f"LeetCode authenticated user: {user['username']}")
 
-    items: list[dict] = []
-    last_key: str | None = None
-    offset = 0
-    page = 0
-    max_pages = 100
-
-    while page < max_pages:
-        page += 1
-        result = leetcode_request(query, {
-            "offset": offset,
-            "limit": limit,
-            "lastKey": last_key,
-            "questionSlug": None,
-        })
-        listing = ((result.get("data") or {}).get("submissionList") or {})
-        batch = listing.get("submissions") or []
-        items.extend(batch)
-
-        print(f"LeetCode submission page {page}: {len(batch)} records")
-
-        if not listing.get("hasNext"):
-            break
-        next_key = listing.get("lastKey")
-        if not next_key or next_key == last_key:
-            print("LeetCode pagination stopped: no new lastKey")
-            break
-        last_key = next_key
-        offset += len(batch)
-
-    print(f"LeetCode submission records returned: {len(items)}")
-
-    accepted_items = [
-        item for item in items
-        if str(item.get("statusDisplay", "")).strip().lower() == "accepted"
-    ]
-    print(f"LeetCode accepted records in history: {len(accepted_items)}")
-
-    out: list[Submission] = []
-    seen_keys: set[str] = set()
-    detail_query = """query submissionDetails($submissionId: Int!) {
+def fetch_submission_code(submission_id: int) -> dict | None:
+    query = """query submissionDetails($submissionId: Int!) {
       submissionDetails(submissionId: $submissionId) {
         code
         timestamp
@@ -148,43 +192,57 @@ def fetch_leetcode(limit: int = 100) -> list[Submission]:
         }
       }
     }"""
+    result = leetcode_request(query, {"submissionId": submission_id})
+    return ((result.get("data") or {}).get("submissionDetails") or None)
 
-    for item in accepted_items:
-        detail = ((leetcode_request(detail_query, {"submissionId": int(item["id"])}).get("data") or {}).get("submissionDetails") or {})
-        if not detail:
-            print(f"Skipping submission {item['id']}: no submissionDetails")
+
+def fetch_leetcode() -> list[Submission]:
+    questions = fetch_accepted_problems()
+    print(f"LeetCode accepted problems reported by profile: {len(questions)}")
+
+    out: list[Submission] = []
+    for index, question in enumerate(questions, 1):
+        slug = question.get("titleSlug")
+        if not slug:
             continue
-        if detail.get("statusCode") not in (None, 10):
-            print(f"Skipping submission {item['id']}: statusCode={detail.get('statusCode')}")
-            continue
-        if not detail.get("code"):
-            print(f"Skipping submission {item['id']}: source code unavailable")
-            continue
 
-        q = detail.get("question") or {}
-        tags = tuple(t["name"] for t in q.get("topicTags") or [] if t.get("name"))
-        language = canonical_language((detail.get("lang") or {}).get("name") or item.get("lang") or "Unknown")
-        problem_id = str(q.get("questionId") or item["id"])
-        key = f"leetcode::{problem_id}::{language.lower()}"
+        try:
+            submission = fetch_latest_accepted(slug)
+            if not submission:
+                print(f"[{index}/{len(questions)}] {slug}: no accepted submission returned")
+                continue
 
-        # The history is newest-first, so keep the newest accepted solution
-        # for each problem/language combination.
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
+            detail = fetch_submission_code(int(submission["id"]))
+            if not detail or not detail.get("code"):
+                print(f"[{index}/{len(questions)}] {slug}: accepted submission found but source unavailable")
+                continue
 
-        out.append(Submission(
-            platform="LeetCode",
-            problem_id=problem_id,
-            title=q.get("title") or "Unknown",
-            language=language,
-            source=detail["code"],
-            accepted_at=str(detail.get("timestamp") or item.get("timestamp") or ""),
-            difficulty=q.get("difficulty") if q.get("difficulty") in {"Easy", "Medium", "Hard"} else None,
-            tags=tags,
-            submission_id=str(item["id"]),
-        ))
+            q = detail.get("question") or {}
+            tags = tuple(t["name"] for t in q.get("topicTags") or [] if t.get("name"))
+            language = canonical_language(
+                (detail.get("lang") or {}).get("name") or submission.get("lang") or "Unknown"
+            )
+            problem_id = str(q.get("questionId") or question.get("questionFrontendId") or slug)
+            difficulty = q.get("difficulty") or question.get("difficulty")
+            title = q.get("title") or question.get("title") or slug
 
+            out.append(Submission(
+                platform="LeetCode",
+                problem_id=problem_id,
+                title=title,
+                language=language,
+                source=detail["code"],
+                accepted_at=str(detail.get("timestamp") or submission.get("timestamp") or question.get("lastSubmittedAt") or ""),
+                difficulty=difficulty if difficulty in {"Easy", "Medium", "Hard"} else None,
+                tags=tags or tuple(t.get("name") for t in question.get("topicTags") or [] if t.get("name")),
+                submission_id=str(submission["id"]),
+            ))
+            print(f"[{index}/{len(questions)}] {problem_id} - {title} [{language}] ✓")
+        except Exception as exc:
+            # One problematic problem must not kill the complete sync.
+            print(f"[{index}/{len(questions)}] {slug}: ERROR: {exc}")
+
+    print(f"LeetCode accepted solutions with source code: {len(out)}")
     return out
 
 
@@ -270,9 +328,11 @@ def main() -> None:
             "solution_path": str(path.relative_to(ROOT)),
         }
         added += 1
+
     save_records(records)
     update_dashboard(records)
     print(f"LeetCode accepted solutions found: {len(submissions)}; added: {added}")
+
     if added:
         git("add", ".")
         git("commit", "-m", f"sync: add {added} accepted DSA solution(s)")
