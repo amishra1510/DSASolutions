@@ -47,7 +47,7 @@ def save_records(records: dict) -> None:
     DATA.write_text(json.dumps(records, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def session() -> requests.Session:
+def make_session() -> requests.Session:
     cookie = os.environ.get("LEETCODE_SESSION")
     csrf = os.environ.get("LEETCODE_CSRF_TOKEN")
     if not cookie or not csrf:
@@ -61,7 +61,7 @@ def session() -> requests.Session:
         "Accept": "application/json",
         "Origin": "https://leetcode.com",
         "Referer": "https://leetcode.com/",
-        "User-Agent": "Mozilla/5.0 DSASolutions/6.0",
+        "User-Agent": "Mozilla/5.0 DSASolutions/7.0",
         "X-CSRFToken": csrf,
     })
     return s
@@ -72,12 +72,11 @@ def gql(s: requests.Session, query: str, variables: dict, operation: str) -> dic
     last = None
     for attempt in range(3):
         try:
-            r = s.post(GRAPHQL, json=payload, timeout=30)
-            r.raise_for_status()
-            data = r.json()
+            response = s.post(GRAPHQL, json=payload, timeout=30)
+            response.raise_for_status()
+            data = response.json()
             if data.get("errors"):
-                messages = "; ".join(str(e.get("message", "GraphQL error")) for e in data["errors"])
-                raise RuntimeError(messages)
+                raise RuntimeError("; ".join(str(e.get("message", "GraphQL error")) for e in data["errors"]))
             return data
         except Exception as exc:
             last = exc
@@ -86,7 +85,7 @@ def gql(s: requests.Session, query: str, variables: dict, operation: str) -> dic
     raise RuntimeError(f"LeetCode request failed: {last}")
 
 
-def verify(s: requests.Session) -> str:
+def verify_login(s: requests.Session) -> str:
     query = "query globalData { userStatus { isSignedIn username userId } }"
     status = ((gql(s, query, {}, "globalData").get("data") or {}).get("userStatus") or {})
     if not status.get("isSignedIn"):
@@ -94,76 +93,54 @@ def verify(s: requests.Session) -> str:
     return status.get("username") or "unknown"
 
 
-def accepted_questions(s: requests.Session) -> list[dict]:
-    # This is the established questionList API. The status filter is AC, so
-    # LeetCode itself selects the user's accepted questions; we do not depend
-    # on the unreliable per-question `status` field from problemsetQuestionListV2.
+def fetch_recent_accepted(s: requests.Session, username: str) -> list[dict]:
+    """Return LeetCode's own accepted-submission feed.
+
+    IMPORTANT: recentAcSubmissionList is already an AC-only feed. Older versions
+    of this script incorrectly treated these records like generic submissions and
+    filtered on a missing statusDisplay field, turning valid AC records into zero.
+    """
     query = """
-    query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {
-      problemsetQuestionList: questionList(categorySlug: $categorySlug, limit: $limit, skip: $skip, filters: $filters) {
-        total: totalNum
-        questions: data {
-          frontendQuestionId: questionFrontendId
-          title
-          titleSlug
-          difficulty
-          status
-          topicTags { name slug }
-        }
+    query recentAcSubmissions($username: String!, $limit: Int!) {
+      recentAcSubmissionList(username: $username, limit: $limit) {
+        id
+        title
+        titleSlug
+        timestamp
       }
     }
     """
-
-    out: list[dict] = []
-    skip = 0
-    limit = 100
-    while True:
-        result = gql(
-            s,
-            query,
-            {"categorySlug": "", "skip": skip, "limit": limit, "filters": {"status": "AC"}},
-            "problemsetQuestionList",
-        )
-        listing = ((result.get("data") or {}).get("problemsetQuestionList") or {})
-        batch = listing.get("questions") or []
-        total = int(listing.get("total") or 0)
-        out.extend(batch)
-        print(f"LeetCode AC page {skip // limit + 1}: {len(batch)} problems (total: {total})")
-        skip += len(batch)
-        if not batch or skip >= total or len(batch) < limit:
-            break
-    print(f"LeetCode accepted problems found: {len(out)}")
-    return out
+    result = gql(s, query, {"username": username, "limit": 100}, "recentAcSubmissions")
+    rows = ((result.get("data") or {}).get("recentAcSubmissionList") or [])
+    print(f"LeetCode recent AC submissions returned: {len(rows)}")
+    return rows
 
 
-def accepted_submission(s: requests.Session, slug: str) -> dict | None:
-    # questionSubmissionList supports an explicit status=10 (Accepted),
-    # avoiding the generic submissionList endpoint that has changed behavior.
+def fetch_question(s: requests.Session, slug: str) -> dict:
     query = """
-    query questionSubmissionList($offset: Int!, $limit: Int!, $lastKey: String, $questionSlug: String!, $lang: Int, $status: Int) {
-      questionSubmissionList(offset: $offset, limit: $limit, lastKey: $lastKey, questionSlug: $questionSlug, lang: $lang, status: $status) {
-        submissions { id titleSlug status statusDisplay lang timestamp }
+    query questionTitle($titleSlug: String!) {
+      question(titleSlug: $titleSlug) {
+        questionId
+        questionFrontendId
+        title
+        titleSlug
+        difficulty
+        topicTags { name slug }
       }
     }
     """
-    result = gql(
-        s,
-        query,
-        {"offset": 0, "limit": 1, "lastKey": None, "questionSlug": slug, "lang": None, "status": 10},
-        "questionSubmissionList",
-    )
-    listing = ((result.get("data") or {}).get("questionSubmissionList") or {})
-    submissions = listing.get("submissions") or []
-    return submissions[0] if submissions else None
+    result = gql(s, query, {"titleSlug": slug}, "questionTitle")
+    return ((result.get("data") or {}).get("question") or {})
 
 
-def submission_source(s: requests.Session, submission_id: int) -> dict | None:
+def fetch_submission_source(s: requests.Session, submission_id: int) -> dict | None:
     query = """
     query submissionDetails($submissionId: Int!) {
       submissionDetails(submissionId: $submissionId) {
         code
         timestamp
         lang { name langSlug }
+        statusCode
       }
     }
     """
@@ -171,7 +148,7 @@ def submission_source(s: requests.Session, submission_id: int) -> dict | None:
     return ((result.get("data") or {}).get("submissionDetails") or None)
 
 
-def language(value: str) -> str:
+def canonical_language(value: str) -> str:
     return {
         "cpp": "C++", "c++": "C++", "python": "Python", "python3": "Python",
         "java": "Java", "javascript": "JavaScript", "typescript": "TypeScript",
@@ -184,34 +161,42 @@ def safe(value: str) -> str:
     return re.sub(r"\s+", "-", value)[:100] or "Unknown"
 
 
-def topic(tags: tuple[str, ...]) -> str:
+def primary_topic(tags: tuple[str, ...]) -> str:
     priority = [
         "Array", "String", "Hash Table", "Two Pointers", "Binary Search", "Linked List",
         "Stack", "Queue", "Tree", "Graph", "Dynamic Programming", "Greedy",
         "Backtracking", "Heap", "Sorting", "Math", "Bit Manipulation",
     ]
-    low = {x.lower() for x in tags}
-    return next((x for x in priority if x.lower() in low), tags[0] if tags else "Other")
+    lowered = {x.lower() for x in tags}
+    return next((x for x in priority if x.lower() in lowered), tags[0] if tags else "Other")
 
 
-def ext(lang: str) -> str:
-    return {"C++": "cpp", "C": "c", "Python": "py", "Java": "java", "JavaScript": "js", "TypeScript": "ts", "Go": "go", "Rust": "rs"}.get(lang, "txt")
+def extension(language: str) -> str:
+    return {
+        "C++": "cpp", "C": "c", "Python": "py", "Java": "java",
+        "JavaScript": "js", "TypeScript": "ts", "Go": "go", "Rust": "rs",
+    }.get(language, "txt")
 
 
-def write_solution(sub: Submission) -> Path:
-    path = ROOT / "LeetCode" / safe(sub.language) / safe(topic(sub.tags)) / safe(sub.difficulty or "Unknown") / f"{safe(sub.problem_id)}-{safe(sub.title)}.{ext(sub.language)}"
+def write_solution(submission: Submission) -> Path:
+    path = (
+        ROOT / "LeetCode" / safe(submission.language) /
+        safe(primary_topic(submission.tags)) /
+        safe(submission.difficulty or "Unknown") /
+        f"{safe(submission.problem_id)}-{safe(submission.title)}.{extension(submission.language)}"
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(sub.source.rstrip() + "\n", encoding="utf-8")
+    path.write_text(submission.source.rstrip() + "\n", encoding="utf-8")
     return path
 
 
-def dashboard(records: dict) -> None:
+def update_dashboard(records: dict) -> None:
     counts = {d: sum(1 for r in records.values() if r.get("difficulty") == d) for d in ("Easy", "Medium", "Hard")}
     text = [
         "# DSA Solutions", "",
-        "Automated accepted-submission archive.", "",
+        "Automated accepted-submission archive for LeetCode, CodeChef and HackerRank.", "",
         "## Progress",
-        f"**{len(records)} solved** — Easy: {counts['Easy']} · Medium: {counts['Medium']} · Hard: {counts['Hard']}", "",
+        f"**{len(records)} synced** — Easy: {counts['Easy']} · Medium: {counts['Medium']} · Hard: {counts['Hard']}", "",
         "## Layout", "`LeetCode / Language / Topic / Difficulty / Problem.cpp`", "",
         "Accepted LeetCode submissions are synchronized by GitHub Actions.",
     ]
@@ -224,48 +209,55 @@ def git(*args: str) -> None:
 
 def main() -> None:
     records = load_records()
-    s = session()
-    username = verify(s)
+    s = make_session()
+    username = verify_login(s)
     print(f"LeetCode authenticated user: {username}")
 
-    questions = accepted_questions(s)
+    accepted = fetch_recent_accepted(s, username)
     found = 0
     added = 0
 
-    for i, q in enumerate(questions, 1):
-        slug = q.get("titleSlug")
+    for index, item in enumerate(accepted, 1):
+        slug = item.get("titleSlug")
         if not slug:
             continue
         try:
-            sub = accepted_submission(s, slug)
-            if not sub:
-                print(f"[{i}/{len(questions)}] {slug}: no accepted submission")
+            question = fetch_question(s, slug)
+            if not question:
+                print(f"[{index}/{len(accepted)}] {slug}: question metadata unavailable")
                 continue
 
-            detail = submission_source(s, int(sub["id"]))
+            detail = fetch_submission_source(s, int(item["id"]))
             if not detail or not detail.get("code"):
-                print(f"[{i}/{len(questions)}] {slug}: source unavailable")
+                print(f"[{index}/{len(accepted)}] {slug}: source unavailable")
                 continue
 
-            tags = tuple(t["name"] for t in q.get("topicTags") or [] if t.get("name"))
-            lang = language((detail.get("lang") or {}).get("name") or sub.get("lang") or "Unknown")
-            difficulty = q.get("difficulty") if q.get("difficulty") in {"Easy", "Medium", "Hard"} else None
+            # recentAcSubmissionList is AC-only. We only additionally guard
+            # against an unexpected non-10 detail response when the field exists.
+            if detail.get("statusCode") is not None and int(detail["statusCode"]) != 10:
+                print(f"[{index}/{len(accepted)}] {slug}: submission is not accepted")
+                continue
+
+            tags = tuple(t.get("name") for t in question.get("topicTags") or [] if t.get("name"))
+            lang = canonical_language((detail.get("lang") or {}).get("name") or "Unknown")
+            difficulty = question.get("difficulty") if question.get("difficulty") in {"Easy", "Medium", "Hard"} else None
+
             solution = Submission(
-                "LeetCode",
-                str(q.get("frontendQuestionId") or slug),
-                q.get("title") or slug,
-                slug,
-                lang,
-                detail["code"],
-                str(detail.get("timestamp") or sub.get("timestamp") or ""),
-                difficulty,
-                tags,
-                str(sub["id"]),
+                platform="LeetCode",
+                problem_id=str(question.get("questionFrontendId") or question.get("questionId") or slug),
+                title=question.get("title") or item.get("title") or slug,
+                slug=slug,
+                language=lang,
+                source=detail["code"],
+                accepted_at=str(detail.get("timestamp") or item.get("timestamp") or ""),
+                difficulty=difficulty,
+                tags=tags,
+                submission_id=str(item["id"]),
             )
             found += 1
 
             if solution.key in records:
-                print(f"[{i}/{len(questions)}] {slug}: already synced")
+                print(f"[{index}/{len(accepted)}] {slug}: already synced")
                 continue
 
             path = write_solution(solution)
@@ -276,12 +268,12 @@ def main() -> None:
                 "solution_path": str(path.relative_to(ROOT)),
             }
             added += 1
-            print(f"[{i}/{len(questions)}] {slug}: synced -> {path.relative_to(ROOT)}")
+            print(f"[{index}/{len(accepted)}] {slug}: synced -> {path.relative_to(ROOT)}")
         except Exception as exc:
-            print(f"[{i}/{len(questions)}] {slug}: ERROR: {exc}")
+            print(f"[{index}/{len(accepted)}] {slug}: ERROR: {exc}")
 
     save_records(records)
-    dashboard(records)
+    update_dashboard(records)
     print(f"LeetCode accepted solutions found: {found}; added: {added}")
 
     if added:
