@@ -56,7 +56,7 @@ def leetcode_request(query: str, variables: dict | None = None) -> dict:
         "Content-Type": "application/json", "Accept": "application/json",
         "Origin": "https://leetcode.com", "Referer": "https://leetcode.com/",
         "x-csrftoken": csrf, "Cookie": f"LEETCODE_SESSION={session}; csrftoken={csrf}",
-        "User-Agent": "Mozilla/5.0 DSASolutions/1.0",
+        "User-Agent": "Mozilla/5.0 DSASolutions/1.1",
     })
     try:
         with urllib.request.urlopen(req, timeout=30) as response:
@@ -68,19 +68,37 @@ def leetcode_request(query: str, variables: dict | None = None) -> dict:
     return result
 
 
-def fetch_leetcode(limit: int = 20) -> list[Submission]:
+def fetch_leetcode(limit: int = 100) -> list[Submission]:
+    """Read the authenticated user's submission list, then retrieve accepted source code.
+
+    recentAcSubmissionList is public and can return an empty list when submission
+    history visibility changes. submissionList is authenticated and is therefore
+    the reliable source for this sync job.
+    """
     status = leetcode_request("""query { userStatus { isSignedIn username } }""")
     user = (status.get("data") or {}).get("userStatus") or {}
-    if not user.get("isSignedIn"):
-        raise RuntimeError("LeetCode authentication rejected")
+    if not user.get("isSignedIn") or not user.get("username"):
+        raise RuntimeError("LeetCode authentication rejected or username unavailable")
 
-    query = """query recent($username: String!, $limit: Int!) {
-      recentAcSubmissionList(username: $username, limit: $limit) { id title timestamp }
+    query = """query submissions($offset: Int!, $limit: Int!, $lastKey: String, $questionSlug: String) {
+      submissionList(offset: $offset, limit: $limit, lastKey: $lastKey, questionSlug: $questionSlug) {
+        lastKey
+        hasNext
+        submissions {
+          id
+          statusDisplay
+          lang
+          timestamp
+        }
+      }
     }"""
-    result = leetcode_request(query, {"username": user["username"], "limit": limit})
-    items = ((result.get("data") or {}).get("recentAcSubmissionList") or [])
-    out: list[Submission] = []
+    result = leetcode_request(query, {"offset": 0, "limit": limit, "lastKey": None, "questionSlug": None})
+    listing = ((result.get("data") or {}).get("submissionList") or {})
+    items = listing.get("submissions") or []
+    print(f"LeetCode authenticated user: {user['username']}")
+    print(f"LeetCode submission records returned: {len(items)}")
 
+    out: list[Submission] = []
     detail_query = """query details($id: Int!) {
       submissionDetails(submissionId: $id) {
         code timestamp statusCode
@@ -89,6 +107,8 @@ def fetch_leetcode(limit: int = 20) -> list[Submission]:
       }
     }"""
     for item in items:
+        if str(item.get("statusDisplay", "")).lower() != "accepted":
+            continue
         detail = ((leetcode_request(detail_query, {"id": int(item["id"])}).get("data") or {}).get("submissionDetails") or {})
         if detail.get("statusCode") != 10 or not detail.get("code"):
             continue
@@ -96,8 +116,8 @@ def fetch_leetcode(limit: int = 20) -> list[Submission]:
         tags = tuple(t["name"] for t in q.get("topicTags") or [] if t.get("name"))
         out.append(Submission(
             platform="LeetCode", problem_id=str(q.get("questionId") or item["id"]),
-            title=q.get("title") or item.get("title") or "Unknown",
-            language=canonical_language((detail.get("lang") or {}).get("name", "Unknown")),
+            title=q.get("title") or "Unknown",
+            language=canonical_language((detail.get("lang") or {}).get("name") or item.get("lang") or "Unknown"),
             source=detail["code"], accepted_at=str(detail.get("timestamp") or item.get("timestamp") or ""),
             difficulty=q.get("difficulty") if q.get("difficulty") in {"Easy", "Medium", "Hard"} else None,
             tags=tags, submission_id=str(item["id"]),
@@ -165,7 +185,7 @@ def main() -> None:
         added += 1
     save_records(records)
     update_dashboard(records)
-    print(f"LeetCode checked: {len(submissions)} accepted submissions; added: {added}")
+    print(f"LeetCode accepted submissions found: {len(submissions)}; added: {added}")
     if added:
         git("add", ".")
         git("commit", "-m", f"sync: add {added} accepted DSA solution(s)")
