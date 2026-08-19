@@ -20,6 +20,19 @@ def load_records() -> dict:
     return json.loads(DATA.read_text(encoding="utf-8")) if DATA.exists() else {}
 
 
+def unique_records(records: dict) -> list[dict]:
+    """Count one solved problem once per platform/language."""
+    unique = {}
+    for record in records.values():
+        key = (
+            record.get("platform"),
+            record.get("problem_id") or record.get("slug") or record.get("title"),
+            (record.get("language") or "Unknown").lower(),
+        )
+        unique[key] = record
+    return list(unique.values())
+
+
 def parse_date(record: dict):
     value = record.get("accepted_at") or record.get("acceptedAt")
     if not value:
@@ -32,8 +45,8 @@ def parse_date(record: dict):
         return None
 
 
-def streaks(records: dict) -> tuple[int, int]:
-    dates = sorted({d for r in records.values() if (d := parse_date(r)) is not None})
+def streaks(records: list[dict]) -> tuple[int, int]:
+    dates = sorted({d for r in records if (d := parse_date(r)) is not None})
     if not dates:
         return 0, 0
 
@@ -57,8 +70,15 @@ def streaks(records: dict) -> tuple[int, int]:
     return current_streak, best
 
 
-def platform_block(platform: str, rows: list[dict]) -> list[str]:
+def difficulty_text(rows: list[dict]) -> str:
     counts = Counter(r.get("difficulty") for r in rows)
+    parts = [f"Easy {counts['Easy']}", f"Medium {counts['Medium']}", f"Hard {counts['Hard']}"]
+    if counts["Unknown"]:
+        parts.append(f"Unknown {counts['Unknown']}")
+    return " · ".join(parts)
+
+
+def platform_block(platform: str, rows: list[dict]) -> list[str]:
     languages = Counter(r.get("language") or "Unknown" for r in rows)
     topics = Counter((r.get("tags") or ["Other"])[0] for r in rows)
     lang_text = " · ".join(f"{k}: {v}" for k, v in languages.most_common()) or "—"
@@ -69,7 +89,7 @@ def platform_block(platform: str, rows: list[dict]) -> list[str]:
         "<tr><td align=\"center\">",
         f"<h2>{PLATFORM_EMOJI.get(platform, '⬜')} {platform}</h2>",
         f"<h3>{len(rows)} solved</h3>",
-        f"<b>Easy {counts['Easy']} · Medium {counts['Medium']} · Hard {counts['Hard']}</b><br>",
+        f"<b>{difficulty_text(rows)}</b><br>",
         f"Languages: {lang_text}<br>",
         f"Topics: {topic_text}",
         "</td></tr>",
@@ -78,10 +98,10 @@ def platform_block(platform: str, rows: list[dict]) -> list[str]:
 
 
 def main() -> None:
-    records = load_records()
-    rows = list(records.values())
+    raw_records = load_records()
+    rows = unique_records(raw_records)
     difficulties = Counter(r.get("difficulty") for r in rows)
-    current, best = streaks(records)
+    current, best = streaks(rows)
 
     lines = [
         "# DSA Solutions",
@@ -92,7 +112,7 @@ def main() -> None:
         "",
         f"<h2 align=\"center\">Total Progress — {len(rows)} problems solved</h2>",
         "",
-        f"<p align=\"center\"><b>Easy {difficulties['Easy']} · Medium {difficulties['Medium']} · Hard {difficulties['Hard']}</b></p>",
+        f"<p align=\"center\"><b>Easy {difficulties['Easy']} · Medium {difficulties['Medium']} · Hard {difficulties['Hard']}" + (f" · Unknown {difficulties['Unknown']}" if difficulties["Unknown"] else "") + "</b></p>",
         "",
         f"<p align=\"center\">🔥 Current streak: <b>{current} day{'s' if current != 1 else ''}</b> &nbsp;&nbsp; 🏆 Best streak: <b>{best} day{'s' if best != 1 else ''}</b></p>",
         "",
@@ -116,7 +136,7 @@ def main() -> None:
     ])
 
     README.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Dashboard updated: {len(rows)} total solutions")
+    print(f"Dashboard updated: {len(rows)} unique solved problems")
 
 
 if __name__ == "__main__":
