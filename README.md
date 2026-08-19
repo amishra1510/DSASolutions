@@ -45,7 +45,6 @@ Topics: —
 ---
 
 ## 📁 Repository Layout
-
 `Platform / Language / Topic / Difficulty / Problem.cpp`
 
 _This dashboard is automatically regenerated after every sync._
