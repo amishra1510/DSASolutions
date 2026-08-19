@@ -47,33 +47,117 @@ def language_ext(value: str) -> tuple[str, str]:
 def session() -> requests.Session:
     s = requests.Session()
     s.headers.update({
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/151 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151 Safari/537.36",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept": "application/json, text/plain, */*",
         "Referer": f"{BASE}/submissions/all",
+        "X-Requested-With": "XMLHttpRequest",
     })
+
     cookie = os.environ.get("HACKERRANK_COOKIE", "").strip()
     if cookie:
+        # Keep the exact browser Cookie header supplied in the GitHub secret.
         s.headers["Cookie"] = cookie
+
+        # Some HackerRank deployments expose the CSRF value as a cookie. If it
+        # is present, mirror it into the header expected by authenticated XHRs.
+        pairs = {}
+        for part in cookie.split(";"):
+            if "=" in part:
+                k, v = part.strip().split("=", 1)
+                pairs[k.strip()] = v.strip()
+        for name in ("csrf_token", "csrfToken", "XSRF-TOKEN", "_csrf"):
+            if pairs.get(name):
+                s.headers["X-CSRF-Token"] = pairs[name]
+                break
+
     return s
+
+
+def _extract_models(value) -> list[dict]:
+    """Recursively find HackerRank submission-like model arrays in JSON."""
+    found: list[dict] = []
+    if isinstance(value, dict):
+        if "models" in value and isinstance(value["models"], list):
+            found.extend(x for x in value["models"] if isinstance(x, dict))
+        for child in value.values():
+            found.extend(_extract_models(child))
+    elif isinstance(value, list):
+        for child in value:
+            found.extend(_extract_models(child))
+    return found
+
+
+def _models_from_html(html: str) -> list[dict]:
+    """Try to recover submission models from server-rendered/bootstrapped state."""
+    models: list[dict] = []
+    soup = BeautifulSoup(html, "html.parser")
+
+    for script in soup.find_all("script"):
+        text = script.string or script.get_text()
+        if not text or "submission" not in text.lower():
+            continue
+
+        # First try complete JSON script blocks.
+        text = text.strip()
+        candidates = [text]
+        if text.startswith("window.") and "=" in text:
+            candidates.append(text.split("=", 1)[1].strip().rstrip(";"))
+
+        for candidate in candidates:
+            try:
+                models.extend(_extract_models(json.loads(candidate)))
+            except Exception:
+                pass
+
+    return models
 
 
 def discover_submissions(s: requests.Session, username: str) -> list[dict]:
     """Discover accepted submissions for the authenticated HackerRank account.
 
-    HackerRank's /submissions/all page is client-rendered, so scraping its HTML
-    is unreliable. The submissions REST endpoint returns the actual submission
-    models for the authenticated session.
+    HackerRank's submissions UI is client-rendered. The current REST endpoint
+    is tried with browser-like authentication first; if it returns no models,
+    the submissions page is inspected for bootstrapped submission state.
     """
-    api = f"{BASE}/rest/contests/master/submissions/?offset=0&limit=1000"
-    r = s.get(api, timeout=30)
-    r.raise_for_status()
-    data = r.json()
-    models = data.get("models", []) if isinstance(data, dict) else []
+    models: list[dict] = []
+
+    endpoints = [
+        f"{BASE}/rest/contests/master/submissions/?offset=0&limit=1000",
+        f"{BASE}/rest/contests/master/submissions?offset=0&limit=1000",
+        f"{BASE}/rest/contests/master/submissions/?offset=0&limit=100",
+    ]
+
+    for api in endpoints:
+        r = s.get(api, timeout=30)
+        if r.status_code != 200:
+            continue
+        try:
+            data = r.json()
+        except ValueError:
+            continue
+        models.extend(_extract_models(data))
+        if models:
+            break
+
+    if not models:
+        page = s.get(f"{BASE}/submissions/all", timeout=30)
+        if page.status_code == 200:
+            models = _models_from_html(page.text)
+
+    # Deduplicate model objects by submission id.
+    unique = []
+    seen_ids = set()
+    for model in models:
+        sid = model.get("id")
+        key = str(sid) if sid is not None else json.dumps(model, sort_keys=True)
+        if key not in seen_ids:
+            seen_ids.add(key)
+            unique.append(model)
 
     rows: list[dict] = []
-    seen: set[str] = set()
-    for model in models:
+    seen_challenges: set[str] = set()
+    for model in unique:
         if str(model.get("status", "")).lower() != "accepted":
             continue
 
@@ -83,15 +167,11 @@ def discover_submissions(s: requests.Session, username: str) -> list[dict]:
             continue
 
         # Keep the latest accepted submission for each challenge.
-        if slug in seen:
+        if slug in seen_challenges:
             continue
-        seen.add(slug)
+        seen_challenges.add(slug)
 
-        language = (
-            model.get("language")
-            or model.get("language_name")
-            or "Unknown"
-        )
+        language = model.get("language") or model.get("language_name") or "Unknown"
         title = challenge.get("name") or model.get("name") or slug
         rows.append({
             "id": model.get("id"),
