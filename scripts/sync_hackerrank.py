@@ -46,7 +46,12 @@ def language_ext(value: str) -> tuple[str, str]:
 
 def session() -> requests.Session:
     s = requests.Session()
-    s.headers.update({"User-Agent": "Mozilla/5.0 DSASolutions/1.0", "Accept-Language": "en-US,en;q=0.9"})
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/151 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": f"{BASE}/submissions/all",
+    })
     cookie = os.environ.get("HACKERRANK_COOKIE", "").strip()
     if cookie:
         s.headers["Cookie"] = cookie
@@ -54,40 +59,71 @@ def session() -> requests.Session:
 
 
 def discover_submissions(s: requests.Session, username: str) -> list[dict]:
-    r = s.get(f"{BASE}/submissions/all", timeout=30)
+    """Discover accepted submissions for the authenticated HackerRank account.
+
+    HackerRank's /submissions/all page is client-rendered, so scraping its HTML
+    is unreliable. The submissions REST endpoint returns the actual submission
+    models for the authenticated session.
+    """
+    api = f"{BASE}/rest/contests/master/submissions/?offset=0&limit=1000"
+    r = s.get(api, timeout=30)
     r.raise_for_status()
-    soup = BeautifulSoup(r.text, "html.parser")
-    rows = []
-    seen = set()
-    for node in soup.find_all("a", href=True):
-        href = node["href"]
-        m = re.search(r"/challenges/([^/?#]+)/", href)
-        if not m:
+    data = r.json()
+    models = data.get("models", []) if isinstance(data, dict) else []
+
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for model in models:
+        if str(model.get("status", "")).lower() != "accepted":
             continue
-        slug = m.group(1)
-        row = node.find_parent("tr") or node.parent
-        text = row.get_text(" ", strip=True) if row else node.get_text(" ", strip=True)
-        if not re.search(r"Accepted|Success|100%|Score", text, re.I):
+
+        challenge = model.get("challenge") or {}
+        slug = challenge.get("slug") or model.get("challenge_slug")
+        if not slug:
             continue
-        key = slug
-        if key in seen:
+
+        # Keep the latest accepted submission for each challenge.
+        if slug in seen:
             continue
-        seen.add(key)
-        language = "Unknown"
-        for candidate in ("C++", "C", "Python", "Java", "JavaScript", "TypeScript", "Ruby", "Kotlin", "Go", "Swift"):
-            if re.search(rf"\b{re.escape(candidate)}\b", text, re.I):
-                language = candidate
-                break
-        rows.append({"slug": slug, "title": node.get_text(" ", strip=True) or slug, "language": language})
+        seen.add(slug)
+
+        language = (
+            model.get("language")
+            or model.get("language_name")
+            or "Unknown"
+        )
+        title = challenge.get("name") or model.get("name") or slug
+        rows.append({
+            "id": model.get("id"),
+            "slug": slug,
+            "title": title,
+            "language": language,
+        })
+
     return rows
 
 
-def download_solution(s: requests.Session, username: str, slug: str) -> str:
+def download_solution(s: requests.Session, username: str, slug: str, submission_id=None) -> str:
+    # The submission-specific endpoint is the most reliable way to retrieve
+    # the exact accepted source belonging to the submission.
+    if submission_id is not None:
+        url = f"{BASE}/rest/contests/master/challenges/{slug}/submissions/{submission_id}"
+        r = s.get(url, timeout=30)
+        if r.status_code == 200:
+            try:
+                model = r.json().get("model", {})
+                code = model.get("code")
+                if isinstance(code, str) and code.strip():
+                    return code.strip()
+            except (ValueError, AttributeError):
+                pass
+
+    # Fallback used by HackerRank for a user's saved solution.
     url = f"{BASE}/rest/contests/master/challenges/{slug}/hackers/{username}/download_solution"
     r = s.get(url, timeout=30)
     if r.status_code == 200 and r.text.strip():
         return r.text.strip()
-    raise RuntimeError(f"download_solution returned HTTP {r.status_code}")
+    raise RuntimeError(f"could not download solution (HTTP {r.status_code})")
 
 
 def challenge_metadata(s: requests.Session, slug: str) -> tuple[str, str]:
@@ -113,28 +149,41 @@ def main():
     if not username or not cookie:
         print("HackerRank skipped: configure HACKERRANK_USERNAME and HACKERRANK_COOKIE secrets")
         return
+
     s = session()
     records = load_records()
     rows = discover_submissions(s, username)
     print(f"HackerRank accepted submissions discovered: {len(rows)}")
     added = 0
+
     for i, row in enumerate(rows, 1):
         try:
-            code = download_solution(s, username, row["slug"])
+            code = download_solution(s, username, row["slug"], row.get("id"))
             language, ext = language_ext(row["language"])
             title, tag = challenge_metadata(s, row["slug"])
             key = f"hackerrank::{row['slug']}::{language.lower()}"
             if key in records:
                 print(f"[{i}/{len(rows)}] {row['slug']}: already synced")
                 continue
+
             path = ROOT / "HackerRank" / safe(language) / safe(tag) / "Unknown" / f"{safe(row['slug'])}-{safe(title)}.{ext}"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(code + "\n", encoding="utf-8")
-            records[key] = {"platform":"HackerRank","problem_id":row["slug"],"title":title,"language":language,"difficulty":"Unknown","tags":[tag],"solution_path":str(path.relative_to(ROOT)),"source_hash":hashlib.sha256(code.encode()).hexdigest()}
+            records[key] = {
+                "platform": "HackerRank",
+                "problem_id": row["slug"],
+                "title": title,
+                "language": language,
+                "difficulty": "Unknown",
+                "tags": [tag],
+                "solution_path": str(path.relative_to(ROOT)),
+                "source_hash": hashlib.sha256(code.encode()).hexdigest(),
+            }
             added += 1
             print(f"[{i}/{len(rows)}] {row['slug']}: synced -> {path.relative_to(ROOT)}")
         except Exception as exc:
             print(f"[{i}/{len(rows)}] {row['slug']}: ERROR: {exc}")
+
     save_records(records)
     print(f"HackerRank solutions added: {added}")
     if added:
