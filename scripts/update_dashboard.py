@@ -20,16 +20,27 @@ def load_records() -> dict:
     return json.loads(DATA.read_text(encoding="utf-8")) if DATA.exists() else {}
 
 
+def display_language(value: str | None) -> str:
+    """Normalize platform-specific Python runtime names for the dashboard."""
+    v = (value or "Unknown").strip().lower()
+    if v in {"pypy3", "pypy 3", "pypy"} or "python" in v:
+        return "Python"
+    return value or "Unknown"
+
+
 def unique_records(records: dict) -> list[dict]:
     """Count one solved problem once per platform/language."""
     unique = {}
     for record in records.values():
+        language = display_language(record.get("language"))
         key = (
             record.get("platform"),
             record.get("problem_id") or record.get("slug") or record.get("title"),
-            (record.get("language") or "Unknown").lower(),
+            language.lower(),
         )
-        unique[key] = record
+        normalized = dict(record)
+        normalized["language"] = language
+        unique[key] = normalized
     return list(unique.values())
 
 
