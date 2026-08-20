@@ -30,10 +30,13 @@ def safe(value: str) -> str:
 
 
 def language_ext(value: str) -> tuple[str, str]:
-    v = (value or "").lower()
+    v = (value or "").lower().strip()
+    # HackerRank reports Python submissions made with PyPy 3 as "pypy3".
+    # For the archive/dashboard, treat PyPy 3 as Python.
+    if v in {"pypy3", "pypy 3", "pypy"} or "python" in v:
+        return "Python", "py"
     if "c++" in v or "cpp" in v: return "C++", "cpp"
     if v == "c": return "C", "c"
-    if "python" in v: return "Python", "py"
     if "java" in v: return "Java", "java"
     if "javascript" in v: return "JavaScript", "js"
     if "typescript" in v: return "TypeScript", "ts"
@@ -56,11 +59,7 @@ def session() -> requests.Session:
 
     cookie = os.environ.get("HACKERRANK_COOKIE", "").strip()
     if cookie:
-        # Keep the exact browser Cookie header supplied in the GitHub secret.
         s.headers["Cookie"] = cookie
-
-        # Some HackerRank deployments expose the CSRF value as a cookie. If it
-        # is present, mirror it into the header expected by authenticated XHRs.
         pairs = {}
         for part in cookie.split(";"):
             if "=" in part:
@@ -75,7 +74,6 @@ def session() -> requests.Session:
 
 
 def _extract_models(value) -> list[dict]:
-    """Recursively find HackerRank submission-like model arrays in JSON."""
     found: list[dict] = []
     if isinstance(value, dict):
         if "models" in value and isinstance(value["models"], list):
@@ -89,7 +87,6 @@ def _extract_models(value) -> list[dict]:
 
 
 def _models_from_html(html: str) -> list[dict]:
-    """Try to recover submission models from server-rendered/bootstrapped state."""
     models: list[dict] = []
     soup = BeautifulSoup(html, "html.parser")
 
@@ -97,13 +94,10 @@ def _models_from_html(html: str) -> list[dict]:
         text = script.string or script.get_text()
         if not text or "submission" not in text.lower():
             continue
-
-        # First try complete JSON script blocks.
         text = text.strip()
         candidates = [text]
         if text.startswith("window.") and "=" in text:
             candidates.append(text.split("=", 1)[1].strip().rstrip(";"))
-
         for candidate in candidates:
             try:
                 models.extend(_extract_models(json.loads(candidate)))
@@ -114,14 +108,7 @@ def _models_from_html(html: str) -> list[dict]:
 
 
 def discover_submissions(s: requests.Session, username: str) -> list[dict]:
-    """Discover accepted submissions for the authenticated HackerRank account.
-
-    HackerRank's submissions UI is client-rendered. The current REST endpoint
-    is tried with browser-like authentication first; if it returns no models,
-    the submissions page is inspected for bootstrapped submission state.
-    """
     models: list[dict] = []
-
     endpoints = [
         f"{BASE}/rest/contests/master/submissions/?offset=0&limit=1000",
         f"{BASE}/rest/contests/master/submissions?offset=0&limit=1000",
@@ -145,7 +132,6 @@ def discover_submissions(s: requests.Session, username: str) -> list[dict]:
         if page.status_code == 200:
             models = _models_from_html(page.text)
 
-    # Deduplicate model objects by submission id.
     unique = []
     seen_ids = set()
     for model in models:
@@ -166,7 +152,6 @@ def discover_submissions(s: requests.Session, username: str) -> list[dict]:
         if not slug:
             continue
 
-        # Keep the latest accepted submission for each challenge.
         if slug in seen_challenges:
             continue
         seen_challenges.add(slug)
@@ -184,8 +169,6 @@ def discover_submissions(s: requests.Session, username: str) -> list[dict]:
 
 
 def download_solution(s: requests.Session, username: str, slug: str, submission_id=None) -> str:
-    # The submission-specific endpoint is the most reliable way to retrieve
-    # the exact accepted source belonging to the submission.
     if submission_id is not None:
         url = f"{BASE}/rest/contests/master/challenges/{slug}/submissions/{submission_id}"
         r = s.get(url, timeout=30)
@@ -198,7 +181,6 @@ def download_solution(s: requests.Session, username: str, slug: str, submission_
             except (ValueError, AttributeError):
                 pass
 
-    # Fallback used by HackerRank for a user's saved solution.
     url = f"{BASE}/rest/contests/master/challenges/{slug}/hackers/{username}/download_solution"
     r = s.get(url, timeout=30)
     if r.status_code == 200 and r.text.strip():
