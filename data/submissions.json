@@ -115,5 +115,29 @@
     ],
     "solution_path": "HackerRank/pypy3/Other/Unknown/py-if-else-py-if-else.txt",
     "source_hash": "a117ecf909c5796687a635abebe849d72eef293a5cfc5d1c0b171be66cb7694c"
+  },
+  "hackerrank::py-if-else::python": {
+    "platform": "HackerRank",
+    "problem_id": "py-if-else",
+    "title": "py-if-else",
+    "language": "Python",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "HackerRank/Python/Other/Unknown/py-if-else-py-if-else.py",
+    "source_hash": "a117ecf909c5796687a635abebe849d72eef293a5cfc5d1c0b171be66cb7694c"
+  },
+  "hackerrank::py-hello-world::python": {
+    "platform": "HackerRank",
+    "problem_id": "py-hello-world",
+    "title": "py-hello-world",
+    "language": "Python",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "HackerRank/Python/Other/Unknown/py-hello-world-py-hello-world.py",
+    "source_hash": "ef7e73e8e42321e28a78107e5b1b9270d5b69ca621ca4860221006287d5dfc3f"
   }
 }
