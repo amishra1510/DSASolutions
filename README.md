@@ -8,7 +8,7 @@ Automated accepted-submission archive for LeetCode, CodeChef and HackerRank.
 
 <p align="center"><b>Easy 1 · Medium 0 · Hard 0 · Unknown 7</b></p>
 
-<p align="center">🔥 Current streak: <b>1 day</b> &nbsp;&nbsp; 🏆 Best streak: <b>1 day</b></p>
+<p align="center">🔥 Current streak: <b>0 days</b> &nbsp;&nbsp; 🏆 Best streak: <b>1 day</b></p>
 
 <h2 align="center">Platforms</h2>
 
