@@ -205,5 +205,31 @@
     "submission_id": 480568417,
     "solution_path": "HackerRank/C/Other/Unknown/cpp-hello-world-cpp-hello-world.cpp",
     "source_hash": "b942081186e906782800fb251d163e065d4c165215d25cb3cf1aaa48a3427e46"
+  },
+  "hackerrank::submission::480690671": {
+    "platform": "HackerRank",
+    "submission_id": 480690671,
+    "problem_id": "py-if-else",
+    "title": "py-if-else",
+    "language": "Python",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "HackerRank/Python/Other/Unknown/py-if-else-py-if-else.py",
+    "source_hash": "a117ecf909c5796687a635abebe849d72eef293a5cfc5d1c0b171be66cb7694c"
+  },
+  "hackerrank::submission::480394697": {
+    "platform": "HackerRank",
+    "submission_id": 480394697,
+    "problem_id": "py-hello-world",
+    "title": "py-hello-world",
+    "language": "Python",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "HackerRank/Python/Other/Unknown/py-hello-world-py-hello-world.py",
+    "source_hash": "ef7e73e8e42321e28a78107e5b1b9270d5b69ca621ca4860221006287d5dfc3f"
   }
 }
