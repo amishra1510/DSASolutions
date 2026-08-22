@@ -96,25 +96,27 @@
     "platform": "HackerRank",
     "problem_id": "py-hello-world",
     "title": "py-hello-world",
-    "language": "pypy3",
+    "language": "Python",
     "difficulty": "Unknown",
     "tags": [
       "Other"
     ],
     "solution_path": "HackerRank/pypy3/Other/Unknown/py-hello-world-py-hello-world.txt",
-    "source_hash": "ef7e73e8e42321e28a78107e5b1b9270d5b69ca621ca4860221006287d5dfc3f"
+    "source_hash": "ef7e73e8e42321e28a78107e5b1b9270d5b69ca621ca4860221006287d5dfc3f",
+    "submission_id": 480568284
   },
   "hackerrank::py-if-else::pypy3": {
     "platform": "HackerRank",
     "problem_id": "py-if-else",
     "title": "py-if-else",
-    "language": "pypy3",
+    "language": "Python",
     "difficulty": "Unknown",
     "tags": [
       "Other"
     ],
     "solution_path": "HackerRank/pypy3/Other/Unknown/py-if-else-py-if-else.txt",
-    "source_hash": "a117ecf909c5796687a635abebe849d72eef293a5cfc5d1c0b171be66cb7694c"
+    "source_hash": "a117ecf909c5796687a635abebe849d72eef293a5cfc5d1c0b171be66cb7694c",
+    "submission_id": 480690675
   },
   "hackerrank::py-if-else::python": {
     "platform": "HackerRank",
@@ -151,5 +153,57 @@
     ],
     "solution_path": "HackerRank/Python/Other/Unknown/python-division-python-division.py",
     "source_hash": "1c6b3219a2aad708b592bda0ca4a934952815a3c1932e9bf28c507aa8f28ea6b"
+  },
+  "hackerrank::python-loops::pypy3": {
+    "platform": "HackerRank",
+    "problem_id": "python-loops",
+    "title": "python-loops",
+    "language": "Python",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "submission_id": 480928767,
+    "solution_path": "HackerRank/Python/Other/Unknown/python-loops-python-loops.py",
+    "source_hash": "7281028a017255fb5087e299a121e04483f3b9a3992cbc362fda7ba4d6edf869"
+  },
+  "hackerrank::python-division::pypy3": {
+    "platform": "HackerRank",
+    "problem_id": "python-division",
+    "title": "python-division",
+    "language": "Python",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "submission_id": 480872723,
+    "solution_path": "HackerRank/Python/Other/Unknown/python-division-python-division.py",
+    "source_hash": "1c6b3219a2aad708b592bda0ca4a934952815a3c1932e9bf28c507aa8f28ea6b"
+  },
+  "hackerrank::cpp-input-and-output::cpp": {
+    "platform": "HackerRank",
+    "problem_id": "cpp-input-and-output",
+    "title": "cpp-input-and-output",
+    "language": "C++",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "submission_id": 480681418,
+    "solution_path": "HackerRank/C/Other/Unknown/cpp-input-and-output-cpp-input-and-output.cpp",
+    "source_hash": "b340ffe710bd22a8096cf047da9a383244d1db6b4ed5b2a60af90a3fcbafedfd"
+  },
+  "hackerrank::cpp-hello-world::cpp": {
+    "platform": "HackerRank",
+    "problem_id": "cpp-hello-world",
+    "title": "cpp-hello-world",
+    "language": "C++",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "submission_id": 480568417,
+    "solution_path": "HackerRank/C/Other/Unknown/cpp-hello-world-cpp-hello-world.cpp",
+    "source_hash": "b942081186e906782800fb251d163e065d4c165215d25cb3cf1aaa48a3427e46"
   }
 }
