@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 
 import requests
@@ -53,6 +54,8 @@ def session() -> requests.Session:
         "Accept": "application/json, text/plain, */*",
         "Referer": f"{BASE}/submissions/all",
         "X-Requested-With": "XMLHttpRequest",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
     })
 
     cookie = os.environ.get("HACKERRANK_COOKIE", "").strip()
@@ -104,17 +107,13 @@ def _models_from_html(html: str) -> list[dict]:
 
 
 def discover_submissions(s: requests.Session, username: str) -> list[dict]:
-    """Return accepted submissions, keeping every submission ID.
-
-    The old implementation collapsed submissions by challenge, which meant a
-    second accepted submission for the same problem could disappear before the
-    sync code saw it. We deliberately keep every unique submission ID here.
-    """
+    """Return accepted submissions without collapsing repeated challenges."""
     models: list[dict] = []
+    cache_bust = int(time.time())
     endpoints = [
-        f"{BASE}/rest/contests/master/submissions/?offset=0&limit=1000",
-        f"{BASE}/rest/contests/master/submissions?offset=0&limit=1000",
-        f"{BASE}/rest/contests/master/submissions/?offset=0&limit=100",
+        f"{BASE}/rest/contests/master/submissions/?offset=0&limit=1000&_={cache_bust}",
+        f"{BASE}/rest/contests/master/submissions?offset=0&limit=1000&_={cache_bust}",
+        f"{BASE}/rest/contests/master/submissions/?offset=0&limit=100&_={cache_bust}",
     ]
 
     for api in endpoints:
@@ -130,7 +129,7 @@ def discover_submissions(s: requests.Session, username: str) -> list[dict]:
             break
 
     if not models:
-        page = s.get(f"{BASE}/submissions/all", timeout=30)
+        page = s.get(f"{BASE}/submissions/all?_={cache_bust}", timeout=30)
         if page.status_code == 200:
             models = _models_from_html(page.text)
 
@@ -145,8 +144,6 @@ def discover_submissions(s: requests.Session, username: str) -> list[dict]:
             seen_ids.add(key)
             unique.append(model)
 
-    # Newest first. Do not collapse by challenge: two accepted submissions for
-    # the same problem are two distinct events and can each create a commit.
     def submission_sort_key(model):
         try:
             return int(model.get("id", 0))
@@ -159,12 +156,10 @@ def discover_submissions(s: requests.Session, username: str) -> list[dict]:
     for model in unique:
         if str(model.get("status", "")).lower() != "accepted":
             continue
-
         challenge = model.get("challenge") or {}
         slug = challenge.get("slug") or model.get("challenge_slug")
         if not slug:
             continue
-
         language = model.get("language") or model.get("language_name") or "Unknown"
         title = challenge.get("name") or model.get("name") or slug
         rows.append({
@@ -237,9 +232,6 @@ def main():
     known_ids = known_submission_ids(records)
     print(f"HackerRank accepted submissions discovered: {len(rows)}")
 
-    # Only process submission IDs we have never recorded. Existing solutions in
-    # the repo are left alone; the submission record itself is what guarantees
-    # that every new accepted submission produces a Git change.
     new_rows = [row for row in rows if str(row.get("id")) not in known_ids]
     print(f"New HackerRank submissions to record: {len(new_rows)}")
 
@@ -250,19 +242,12 @@ def main():
             language, ext = language_ext(row["language"])
             title, tag = challenge_metadata(s, row["slug"])
             sid = str(row["id"])
-
-            # Use a submission-specific key. This is the critical difference:
-            # repeated submissions of the same problem remain separate events.
             key = f"hackerrank::submission::{sid}"
             if key in records:
                 continue
 
-            path = ROOT / "HackerRank" / safe(language) / safe(tag) / "Unknown" / f"{safe(row['slug'])}-{safe(title)}.py"
+            path = ROOT / "HackerRank" / safe(language) / safe(tag) / "Unknown" / f"{safe(row['slug'])}-{safe(title)}.{ext}"
             path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Do not overwrite the existing solution file for a repeat
-            # submission. The JSON submission record is enough to make a
-            # distinct Git commit while keeping the archive clean.
             if not path.exists():
                 path.write_text(code + "\n", encoding="utf-8")
 
