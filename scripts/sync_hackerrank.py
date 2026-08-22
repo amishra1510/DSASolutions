@@ -31,8 +31,6 @@ def safe(value: str) -> str:
 
 def language_ext(value: str) -> tuple[str, str]:
     v = (value or "").lower().strip()
-    # HackerRank reports Python submissions made with PyPy 3 as "pypy3".
-    # For the archive/dashboard, treat PyPy 3 as Python.
     if v in {"pypy3", "pypy 3", "pypy"} or "python" in v:
         return "Python", "py"
     if "c++" in v or "cpp" in v: return "C++", "cpp"
@@ -89,7 +87,6 @@ def _extract_models(value) -> list[dict]:
 def _models_from_html(html: str) -> list[dict]:
     models: list[dict] = []
     soup = BeautifulSoup(html, "html.parser")
-
     for script in soup.find_all("script"):
         text = script.string or script.get_text()
         if not text or "submission" not in text.lower():
@@ -103,11 +100,16 @@ def _models_from_html(html: str) -> list[dict]:
                 models.extend(_extract_models(json.loads(candidate)))
             except Exception:
                 pass
-
     return models
 
 
 def discover_submissions(s: requests.Session, username: str) -> list[dict]:
+    """Return accepted submissions, keeping every submission ID.
+
+    The old implementation collapsed submissions by challenge, which meant a
+    second accepted submission for the same problem could disappear before the
+    sync code saw it. We deliberately keep every unique submission ID here.
+    """
     models: list[dict] = []
     endpoints = [
         f"{BASE}/rest/contests/master/submissions/?offset=0&limit=1000",
@@ -132,18 +134,19 @@ def discover_submissions(s: requests.Session, username: str) -> list[dict]:
         if page.status_code == 200:
             models = _models_from_html(page.text)
 
-    unique = []
-    seen_ids = set()
+    unique: list[dict] = []
+    seen_ids: set[str] = set()
     for model in models:
         sid = model.get("id")
-        key = str(sid) if sid is not None else json.dumps(model, sort_keys=True)
+        if sid is None:
+            continue
+        key = str(sid)
         if key not in seen_ids:
             seen_ids.add(key)
             unique.append(model)
 
-    # Process the newest accepted submission for each challenge first.
-    # This lets the repo notice a new submission even when the same challenge
-    # has been submitted before.
+    # Newest first. Do not collapse by challenge: two accepted submissions for
+    # the same problem are two distinct events and can each create a commit.
     def submission_sort_key(model):
         try:
             return int(model.get("id", 0))
@@ -153,16 +156,14 @@ def discover_submissions(s: requests.Session, username: str) -> list[dict]:
     unique.sort(key=submission_sort_key, reverse=True)
 
     rows: list[dict] = []
-    seen_challenges: set[str] = set()
     for model in unique:
         if str(model.get("status", "")).lower() != "accepted":
             continue
 
         challenge = model.get("challenge") or {}
         slug = challenge.get("slug") or model.get("challenge_slug")
-        if not slug or slug in seen_challenges:
+        if not slug:
             continue
-        seen_challenges.add(slug)
 
         language = model.get("language") or model.get("language_name") or "Unknown"
         title = challenge.get("name") or model.get("name") or slug
@@ -213,6 +214,16 @@ def challenge_metadata(s: requests.Session, slug: str) -> tuple[str, str]:
     return title, tag
 
 
+def known_submission_ids(records: dict) -> set[str]:
+    ids = set()
+    for value in records.values():
+        if isinstance(value, dict) and value.get("platform") == "HackerRank":
+            sid = value.get("submission_id")
+            if sid is not None:
+                ids.add(str(sid))
+    return ids
+
+
 def main():
     username = os.environ.get("HACKERRANK_USERNAME", "").strip()
     cookie = os.environ.get("HACKERRANK_COOKIE", "").strip()
@@ -223,57 +234,53 @@ def main():
     s = session()
     records = load_records()
     rows = discover_submissions(s, username)
+    known_ids = known_submission_ids(records)
     print(f"HackerRank accepted submissions discovered: {len(rows)}")
-    changes = 0
 
-    for i, row in enumerate(rows, 1):
+    # Only process submission IDs we have never recorded. Existing solutions in
+    # the repo are left alone; the submission record itself is what guarantees
+    # that every new accepted submission produces a Git change.
+    new_rows = [row for row in rows if str(row.get("id")) not in known_ids]
+    print(f"New HackerRank submissions to record: {len(new_rows)}")
+
+    changes = 0
+    for i, row in enumerate(new_rows, 1):
         try:
             code = download_solution(s, username, row["slug"], row.get("id"))
             language, ext = language_ext(row["language"])
             title, tag = challenge_metadata(s, row["slug"])
-            key = f"hackerrank::{row['slug']}::{row['language'].lower()}"
-            existing = records.get(key)
+            sid = str(row["id"])
 
-            if existing and str(existing.get("submission_id", "")) == str(row.get("id", "")):
-                print(f"[{i}/{len(rows)}] {row['slug']}: already synced submission {row.get('id')}")
+            # Use a submission-specific key. This is the critical difference:
+            # repeated submissions of the same problem remain separate events.
+            key = f"hackerrank::submission::{sid}"
+            if key in records:
                 continue
 
-            if existing:
-                path = ROOT / existing["solution_path"]
-                old_hash = existing.get("source_hash")
-                new_hash = hashlib.sha256(code.encode()).hexdigest()
-                path.parent.mkdir(parents=True, exist_ok=True)
-                if old_hash != new_hash:
-                    path.write_text(code + "\n", encoding="utf-8")
-                existing.update({
-                    "submission_id": row.get("id"),
-                    "source_hash": new_hash,
-                    "language": language,
-                    "title": title,
-                    "tags": [tag],
-                })
-                changes += 1
-                print(f"[{i}/{len(rows)}] {row['slug']}: recorded new submission {row.get('id')}")
-                continue
-
-            path = ROOT / "HackerRank" / safe(language) / safe(tag) / "Unknown" / f"{safe(row['slug'])}-{safe(title)}.{ext}"
+            path = ROOT / "HackerRank" / safe(language) / safe(tag) / "Unknown" / f"{safe(row['slug'])}-{safe(title)}.py"
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(code + "\n", encoding="utf-8")
+
+            # Do not overwrite the existing solution file for a repeat
+            # submission. The JSON submission record is enough to make a
+            # distinct Git commit while keeping the archive clean.
+            if not path.exists():
+                path.write_text(code + "\n", encoding="utf-8")
+
             records[key] = {
                 "platform": "HackerRank",
+                "submission_id": row["id"],
                 "problem_id": row["slug"],
                 "title": title,
                 "language": language,
                 "difficulty": "Unknown",
                 "tags": [tag],
-                "submission_id": row.get("id"),
                 "solution_path": str(path.relative_to(ROOT)),
                 "source_hash": hashlib.sha256(code.encode()).hexdigest(),
             }
             changes += 1
-            print(f"[{i}/{len(rows)}] {row['slug']}: synced -> {path.relative_to(ROOT)}")
+            print(f"[{i}/{len(new_rows)}] {row['slug']}: recorded submission {sid}")
         except Exception as exc:
-            print(f"[{i}/{len(rows)}] {row['slug']}: ERROR: {exc}")
+            print(f"[{i}/{len(new_rows)}] {row['slug']}: ERROR: {exc}")
 
     save_records(records)
     print(f"HackerRank submission changes: {changes}")
