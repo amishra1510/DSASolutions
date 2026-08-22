@@ -141,6 +141,17 @@ def discover_submissions(s: requests.Session, username: str) -> list[dict]:
             seen_ids.add(key)
             unique.append(model)
 
+    # Process the newest accepted submission for each challenge first.
+    # This lets the repo notice a new submission even when the same challenge
+    # has been submitted before.
+    def submission_sort_key(model):
+        try:
+            return int(model.get("id", 0))
+        except (TypeError, ValueError):
+            return 0
+
+    unique.sort(key=submission_sort_key, reverse=True)
+
     rows: list[dict] = []
     seen_challenges: set[str] = set()
     for model in unique:
@@ -149,10 +160,7 @@ def discover_submissions(s: requests.Session, username: str) -> list[dict]:
 
         challenge = model.get("challenge") or {}
         slug = challenge.get("slug") or model.get("challenge_slug")
-        if not slug:
-            continue
-
-        if slug in seen_challenges:
+        if not slug or slug in seen_challenges:
             continue
         seen_challenges.add(slug)
 
@@ -216,16 +224,36 @@ def main():
     records = load_records()
     rows = discover_submissions(s, username)
     print(f"HackerRank accepted submissions discovered: {len(rows)}")
-    added = 0
+    changes = 0
 
     for i, row in enumerate(rows, 1):
         try:
             code = download_solution(s, username, row["slug"], row.get("id"))
             language, ext = language_ext(row["language"])
             title, tag = challenge_metadata(s, row["slug"])
-            key = f"hackerrank::{row['slug']}::{language.lower()}"
-            if key in records:
-                print(f"[{i}/{len(rows)}] {row['slug']}: already synced")
+            key = f"hackerrank::{row['slug']}::{row['language'].lower()}"
+            existing = records.get(key)
+
+            if existing and str(existing.get("submission_id", "")) == str(row.get("id", "")):
+                print(f"[{i}/{len(rows)}] {row['slug']}: already synced submission {row.get('id')}")
+                continue
+
+            if existing:
+                path = ROOT / existing["solution_path"]
+                old_hash = existing.get("source_hash")
+                new_hash = hashlib.sha256(code.encode()).hexdigest()
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if old_hash != new_hash:
+                    path.write_text(code + "\n", encoding="utf-8")
+                existing.update({
+                    "submission_id": row.get("id"),
+                    "source_hash": new_hash,
+                    "language": language,
+                    "title": title,
+                    "tags": [tag],
+                })
+                changes += 1
+                print(f"[{i}/{len(rows)}] {row['slug']}: recorded new submission {row.get('id')}")
                 continue
 
             path = ROOT / "HackerRank" / safe(language) / safe(tag) / "Unknown" / f"{safe(row['slug'])}-{safe(title)}.{ext}"
@@ -238,19 +266,20 @@ def main():
                 "language": language,
                 "difficulty": "Unknown",
                 "tags": [tag],
+                "submission_id": row.get("id"),
                 "solution_path": str(path.relative_to(ROOT)),
                 "source_hash": hashlib.sha256(code.encode()).hexdigest(),
             }
-            added += 1
+            changes += 1
             print(f"[{i}/{len(rows)}] {row['slug']}: synced -> {path.relative_to(ROOT)}")
         except Exception as exc:
             print(f"[{i}/{len(rows)}] {row['slug']}: ERROR: {exc}")
 
     save_records(records)
-    print(f"HackerRank solutions added: {added}")
-    if added:
+    print(f"HackerRank submission changes: {changes}")
+    if changes:
         subprocess.run(["git", "add", "."], cwd=ROOT, check=True)
-        subprocess.run(["git", "commit", "-m", f"sync: add {added} HackerRank solution(s)"], cwd=ROOT, check=True)
+        subprocess.run(["git", "commit", "-m", f"sync: record {changes} HackerRank submission(s)"], cwd=ROOT, check=True)
         subprocess.run(["git", "push"], cwd=ROOT, check=True)
 
 
