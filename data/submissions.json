@@ -257,5 +257,57 @@
     ],
     "solution_path": "HackerRank/Python/Other/Unknown/python-arithmetic-operators-python-arithmetic-operators.py",
     "source_hash": "2c302dc5f55aa5b4fb579628f34a72b5f49cd1a079d7aba0c4cc95076848c78e"
+  },
+  "codechef::1346500184": {
+    "platform": "CodeChef",
+    "submission_id": "1346500184",
+    "problem_id": "PYTHCL62",
+    "title": "If & Else Statements Practice Coding Problem",
+    "language": "PYTH 3",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "CodeChef/PYTH-3/Other/Unknown/PYTHCL62-If-Else-Statements-Practice-Coding-Problem.txt",
+    "source_hash": "98530266f78064d3d4b5a7be78067fde81ea72a2dba6e05d089c9b80e1500d90"
+  },
+  "codechef::1346500167": {
+    "platform": "CodeChef",
+    "submission_id": "1346500167",
+    "problem_id": "PYTHCL62",
+    "title": "If & Else Statements Practice Coding Problem",
+    "language": "PYTH 3",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "CodeChef/PYTH-3/Other/Unknown/PYTHCL62-If-Else-Statements-Practice-Coding-Problem.txt",
+    "source_hash": "98530266f78064d3d4b5a7be78067fde81ea72a2dba6e05d089c9b80e1500d90"
+  },
+  "codechef::1346499869": {
+    "platform": "CodeChef",
+    "submission_id": "1346499869",
+    "problem_id": "PYTH07",
+    "title": "Multiple Outputs Practice Coding Problem",
+    "language": "PYTH 3",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "CodeChef/PYTH-3/Other/Unknown/PYTH07-Multiple-Outputs-Practice-Coding-Problem.txt",
+    "source_hash": "25bf080bfb8b3a7c39cf756956a420164b7a1d75005caea86dd8125bd926d637"
+  },
+  "codechef::1346499801": {
+    "platform": "CodeChef",
+    "submission_id": "1346499801",
+    "problem_id": "PYTH02",
+    "title": "Printing a number Practice Coding Problem",
+    "language": "PYTH 3",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "CodeChef/PYTH-3/Other/Unknown/PYTH02-Printing-a-number-Practice-Coding-Problem.txt",
+    "source_hash": "8a688f8bc8fe8967543b83b3eee4608659c5a19f7b33d064422388be4e7e49d5"
   }
 }
