@@ -309,5 +309,31 @@
     ],
     "solution_path": "CodeChef/PYTH-3/Other/Unknown/PYTH02-Printing-a-number-Practice-Coding-Problem.txt",
     "source_hash": "8a688f8bc8fe8967543b83b3eee4608659c5a19f7b33d064422388be4e7e49d5"
+  },
+  "codechef::1347050853": {
+    "platform": "CodeChef",
+    "submission_id": "1347050853",
+    "problem_id": "JWHEFQ88",
+    "title": "Convert String to Title Case Practice Coding Problem",
+    "language": "C++",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "CodeChef/C/Other/Unknown/JWHEFQ88-Convert-String-to-Title-Case-Practice-Coding-Problem.cpp",
+    "source_hash": "6db9f5c833652338b1cdec3e25bd6a40cf2d3957f820166e4ca579c60e508e10"
+  },
+  "codechef::1347050832": {
+    "platform": "CodeChef",
+    "submission_id": "1347050832",
+    "problem_id": "JWHEFQ88",
+    "title": "Convert String to Title Case Practice Coding Problem",
+    "language": "C++",
+    "difficulty": "Unknown",
+    "tags": [
+      "Other"
+    ],
+    "solution_path": "CodeChef/C/Other/Unknown/JWHEFQ88-Convert-String-to-Title-Case-Practice-Coding-Problem.cpp",
+    "source_hash": "6db9f5c833652338b1cdec3e25bd6a40cf2d3957f820166e4ca579c60e508e10"
   }
 }
