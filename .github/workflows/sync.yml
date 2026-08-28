@@ -59,6 +59,9 @@ jobs:
       - name: Update progress dashboard
         run: python scripts/update_dashboard.py
 
+      - name: Apply platform logos
+        run: python scripts/apply_platform_logos.py
+
       - name: Commit changes
         run: |
           if git diff --quiet && git diff --cached --quiet; then
