@@ -89,14 +89,13 @@ def difficulty_text(rows: list[dict]) -> str:
     return " · ".join(parts)
 
 
-def platform_block(platform: str, rows: list[dict]) -> list[str]:
+def platform_row(platform: str, rows: list[dict]) -> list[str]:
     languages = Counter(r.get("language") or "Unknown" for r in rows)
     topics = Counter((r.get("tags") or ["Other"])[0] for r in rows)
     lang_text = " · ".join(f"{k}: {v}" for k, v in languages.most_common()) or "—"
     topic_text = " · ".join(f"{k}: {v}" for k, v in topics.most_common(5)) or "—"
 
     return [
-        "<table align=\"center\" width=\"92%\">",
         "<tr><td align=\"center\">",
         f"<h2>{PLATFORM_EMOJI.get(platform, '⬜')} {platform}</h2>",
         f"<h3>{len(rows)} solved</h3>",
@@ -104,7 +103,6 @@ def platform_block(platform: str, rows: list[dict]) -> list[str]:
         f"Languages: {lang_text}<br>",
         f"Topics: {topic_text}",
         "</td></tr>",
-        "</table>",
     ]
 
 
@@ -129,14 +127,17 @@ def main() -> None:
         "",
         "<h2 align=\"center\">Platforms</h2>",
         "",
+        "<table align=\"center\" width=\"100%\">",
     ]
 
     for platform in ("LeetCode", "CodeChef", "HackerRank"):
         platform_rows = [r for r in rows if r.get("platform") == platform]
-        lines.extend(platform_block(platform, platform_rows))
-        lines.append("")
+        lines.extend(platform_row(platform, platform_rows))
+        lines.extend(["<tr><td height=\"18\"></td></tr>"])
 
     lines.extend([
+        "</table>",
+        "",
         "---",
         "",
         "## 📁 Repository Layout",
