@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,11 +11,18 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "submissions.json"
 README = ROOT / "README.md"
 DASHBOARD_SVG = ROOT / "assets" / "dashboard.svg"
+LOGO_DIR = ROOT / "assets" / "logos"
 
 PLATFORM_COLORS = {
     "LeetCode": ("#ff7a18", "#ff4d4d"),
     "CodeChef": ("#a855f7", "#6d28d9"),
     "HackerRank": ("#34d399", "#059669"),
+}
+
+PLATFORM_LOGOS = {
+    "LeetCode": "leetcode.svg",
+    "CodeChef": "codechef.svg",
+    "HackerRank": "hackerrank.svg",
 }
 
 
@@ -91,6 +99,21 @@ def esc(value) -> str:
     return html.escape(str(value), quote=True)
 
 
+def logo_markup(platform: str, x: int, y: int, size: int = 64) -> str:
+    logo_path = LOGO_DIR / PLATFORM_LOGOS[platform]
+    if not logo_path.exists():
+        raise FileNotFoundError(f"Missing platform logo: {logo_path}")
+    source = logo_path.read_text(encoding="utf-8")
+    match = re.search(r'<path\\b[^>]*\\bd="([^"]+)"', source)
+    if not match:
+        raise ValueError(f"Could not find logo path in {logo_path}")
+    return (
+        f'<svg x="{x}" y="{y}" width="{size}" height="{size}" '
+        f'viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label="{esc(platform)} logo">'
+        f'<path fill="#ffffff" d="{esc(match.group(1))}"/></svg>'
+    )
+
+
 def write_dashboard_svg(platform_rows, total, current, best, overall):
     width, height = 1100, 1165
     card_x, card_w, card_h, gap = 50, 1000, 220, 24
@@ -131,7 +154,8 @@ def write_dashboard_svg(platform_rows, total, current, best, overall):
         parts += [
             f'<rect x="{card_x}" y="{y}" width="{card_w}" height="{card_h}" rx="18" fill="#0d1117" stroke="{primary}" stroke-opacity="0.75" filter="url(#shadow)"/>',
             f'<rect x="{card_x + 1}" y="{y + 1}" width="7" height="218" rx="4" fill="{primary}"/>',
-            f'<rect x="{card_x + 38}" y="{y + 38}" width="64" height="64" rx="16" fill="{primary}"/><text x="{card_x + 70}" y="{y + 80}" text-anchor="middle" font-family="Arial" font-size="32" font-weight="700" fill="#fff">{platform[0]}</text>',
+            f'<rect x="{card_x + 38}" y="{y + 38}" width="64" height="64" rx="16" fill="{primary}"/>',
+            logo_markup(platform, card_x + 38, y + 38, 64),
             f'<text x="{card_x + 125}" y="{y + 68}" class="title" font-size="29">{esc(platform)}</text>',
             f'<rect x="{card_x + 805}" y="{y + 40}" width="145" height="52" rx="13" fill="{secondary}" fill-opacity="0.28" stroke="{primary}" stroke-opacity="0.7"/><text x="{card_x + 877}" y="{y + 62}" text-anchor="middle" class="muted" font-size="12">SOLVED</text><text x="{card_x + 877}" y="{y + 84}" text-anchor="middle" class="title" font-size="20">{len(rows)}</text>',
             f'<line x1="{card_x + 125}" y1="{y + 112}" x2="{card_x + 950}" y2="{y + 112}" stroke="#263043"/>',
