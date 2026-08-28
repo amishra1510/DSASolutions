@@ -6,7 +6,6 @@ on:
     paths:
       - ".github/workflows/sync.yml"
       - "scripts/update_dashboard.py"
-      - "scripts/apply_platform_logos.py"
   schedule:
     - cron: "7,27,47 * * * *"
 
@@ -63,13 +62,6 @@ jobs:
 
       - name: Update progress dashboard
         run: python scripts/update_dashboard.py
-
-      - name: Apply platform logos
-        run: python scripts/apply_platform_logos.py
-
-      - name: Remove outer dashboard border
-        run: |
-          sed -i '/<rect x="22" y="22" width="1056" height="1140" rx="20" fill="none" stroke="#263043"\/>/d' assets/dashboard.svg
 
       - name: Commit changes
         run: |
