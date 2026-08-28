@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - ".github/workflows/sync.yml"
+      - "scripts/update_dashboard.py"
       - "scripts/apply_platform_logos.py"
   schedule:
     - cron: "7,27,47 * * * *"
