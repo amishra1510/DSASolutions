@@ -65,6 +65,10 @@ jobs:
       - name: Apply platform logos
         run: python scripts/apply_platform_logos.py
 
+      - name: Remove outer dashboard border
+        run: |
+          sed -i '/<rect x="22" y="22" width="1056" height="1140" rx="20" fill="none" stroke="#263043"\/>/d' assets/dashboard.svg
+
       - name: Commit changes
         run: |
           if git diff --quiet && git diff --cached --quiet; then
