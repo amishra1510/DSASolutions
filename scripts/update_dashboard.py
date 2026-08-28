@@ -115,7 +115,7 @@ def logo_markup(platform: str, x: int, y: int, size: int = 64) -> str:
 
 
 def write_dashboard_svg(platform_rows, total, current, best, overall):
-    width, height = 1100, 1165
+    width, height = 1100, 1185
     card_x, card_w, card_h, gap = 50, 1000, 220, 24
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
@@ -126,7 +126,7 @@ def write_dashboard_svg(platform_rows, total, current, best, overall):
         '<style>.title{font-family:Arial,Helvetica,sans-serif;fill:#f8fafc;font-weight:700}.muted{font-family:Arial,Helvetica,sans-serif;fill:#94a3b8}.body{font-family:Arial,Helvetica,sans-serif;fill:#e2e8f0}</style>',
         '</defs>',
         '<rect width="100%" height="100%" rx="22" fill="url(#bg)"/>',
-        '<rect x="22" y="22" width="1056" height="1121" rx="20" fill="none" stroke="#263043"/>',
+        '<rect x="22" y="22" width="1056" height="1140" rx="20" fill="none" stroke="#263043"/>',
         '<text x="550" y="72" text-anchor="middle" class="muted" font-size="16" letter-spacing="4">DSA PROGRESS</text>',
         f'<text x="550" y="137" text-anchor="middle" class="title" font-size="54">{total} <tspan fill="#94a3b8" font-size="30">Problems Solved</tspan></text>',
         '<rect x="95" y="165" width="910" height="76" rx="14" fill="url(#summary)" stroke="#2b3547"/>',
@@ -153,7 +153,6 @@ def write_dashboard_svg(platform_rows, total, current, best, overall):
         topic = " · ".join(f"{k}: {v}" for k, v in topics.most_common(3)) or "—"
         parts += [
             f'<rect x="{card_x}" y="{y}" width="{card_w}" height="{card_h}" rx="18" fill="#0d1117" stroke="{primary}" stroke-opacity="0.75" filter="url(#shadow)"/>',
-            f'<rect x="{card_x + 1}" y="{y + 1}" width="7" height="218" rx="4" fill="{primary}"/>',
             f'<rect x="{card_x + 38}" y="{y + 38}" width="64" height="64" rx="16" fill="{primary}"/>',
             logo_markup(platform, card_x + 38, y + 38, 64),
             f'<text x="{card_x + 125}" y="{y + 68}" class="title" font-size="29">{esc(platform)}</text>',
