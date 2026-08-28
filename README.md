@@ -12,35 +12,7 @@ Automated accepted-submission archive for LeetCode, CodeChef and HackerRank.
 
 <h2 align="center">Platforms</h2>
 
-<table align="center" width="92%">
-<tr><td align="center">
-<h2>🟧 LeetCode</h2>
-<h3>1 solved</h3>
-<b>Easy 1 · Medium 0 · Hard 0</b><br>
-Languages: C++: 1<br>
-Topics: Array: 1
-</td></tr>
-</table>
-
-<table align="center" width="92%">
-<tr><td align="center">
-<h2>🟪 CodeChef</h2>
-<h3>7 solved</h3>
-<b>Easy 0 · Medium 0 · Hard 0 · Unknown 7</b><br>
-Languages: C++: 4 · PYTH 3: 3<br>
-Topics: Other: 7
-</td></tr>
-</table>
-
-<table align="center" width="92%">
-<tr><td align="center">
-<h2>🟩 HackerRank</h2>
-<h3>7 solved</h3>
-<b>Easy 0 · Medium 0 · Hard 0 · Unknown 7</b><br>
-Languages: Python: 5 · C++: 2<br>
-Topics: Other: 7
-</td></tr>
-</table>
+<p align="center"><img src="assets/dashboard.svg" alt="DSA platform progress dashboard" width="100%"></p>
 
 ---
 
