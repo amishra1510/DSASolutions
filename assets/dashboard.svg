@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="706" viewBox="0 0 1000 706">
+<rect width="100%" height="100%" fill="#0d1117"/>
+<rect x="40" y="10" width="920" height="210" rx="10" fill="#0d1117" stroke="#30363d"/>
+<rect x="360" y="38" width="34" height="34" rx="6" fill="#ff6b35"/>
+<text x="410" y="66" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700">LeetCode</text>
+<line x1="65" y1="92" x2="935" y2="92" stroke="#30363d"/>
+<text x="500" y="136" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700">1 solved</text>
+<text x="500" y="172" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Easy 1 · Medium 0 · Hard 0</text>
+<text x="500" y="198" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="16">Languages: C++: 1</text>
+<text x="500" y="218" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="15">Topics: Array: 1</text>
+
+<rect x="40" y="248" width="920" height="210" rx="10" fill="#0d1117" stroke="#30363d"/>
+<rect x="360" y="276" width="34" height="34" rx="6" fill="#8b5cf6"/>
+<text x="410" y="304" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700">CodeChef</text>
+<line x1="65" y1="330" x2="935" y2="330" stroke="#30363d"/>
+<text x="500" y="374" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700">7 solved</text>
+<text x="500" y="410" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Easy 0 · Medium 0 · Hard 0 · Unknown 7</text>
+<text x="500" y="436" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="16">Languages: C++: 4 · PYTH 3: 3</text>
+<text x="500" y="456" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="15">Topics: Other: 7</text>
+
+<rect x="40" y="486" width="920" height="210" rx="10" fill="#0d1117" stroke="#30363d"/>
+<rect x="360" y="514" width="34" height="34" rx="6" fill="#34d399"/>
+<text x="410" y="542" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700">HackerRank</text>
+<line x1="65" y1="568" x2="935" y2="568" stroke="#30363d"/>
+<text x="500" y="612" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700">7 solved</text>
+<text x="500" y="648" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Easy 0 · Medium 0 · Hard 0 · Unknown 7</text>
+<text x="500" y="674" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="16">Languages: Python: 5 · C++: 2</text>
+<text x="500" y="694" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="15">Topics: Other: 7</text>
+</svg>
