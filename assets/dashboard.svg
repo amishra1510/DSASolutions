@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1120" viewBox="0 0 1100 1120">
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1185" viewBox="0 0 1100 1185">
 <defs>
 <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#080b12"/><stop offset="1" stop-color="#111827"/></linearGradient>
 <linearGradient id="summary" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#111827"/><stop offset="1" stop-color="#171d2b"/></linearGradient>
@@ -6,7 +6,7 @@
 <style>.title{font-family:Arial,Helvetica,sans-serif;fill:#f8fafc;font-weight:700}.muted{font-family:Arial,Helvetica,sans-serif;fill:#94a3b8}.body{font-family:Arial,Helvetica,sans-serif;fill:#e2e8f0}</style>
 </defs>
 <rect width="100%" height="100%" rx="22" fill="url(#bg)"/>
-<rect x="22" y="22" width="1056" height="1076" rx="20" fill="none" stroke="#263043"/>
+<rect x="22" y="22" width="1056" height="1140" rx="20" fill="none" stroke="#263043"/>
 <text x="550" y="72" text-anchor="middle" class="muted" font-size="16" letter-spacing="4">DSA PROGRESS</text>
 <text x="550" y="137" text-anchor="middle" class="title" font-size="54">15 <tspan fill="#94a3b8" font-size="30">Problems Solved</tspan></text>
 <rect x="95" y="165" width="910" height="76" rx="14" fill="url(#summary)" stroke="#2b3547"/>
@@ -19,30 +19,24 @@
 <rect x="565" y="259" width="300" height="72" rx="14" fill="#111827" stroke="#263043"/><text x="595" y="290" font-size="20">🏆</text><text x="630" y="287" class="muted" font-size="14">BEST STREAK</text><text x="630" y="315" class="title" font-size="23">1 day</text>
 <text x="550" y="381" text-anchor="middle" class="muted" font-size="15" letter-spacing="3">PLATFORMS</text>
 <line x1="80" y1="381" x2="350" y2="381" stroke="#263043"/><line x1="750" y1="381" x2="1020" y2="381" stroke="#263043"/>
-
 <rect x="50" y="405" width="1000" height="220" rx="18" fill="#0d1117" stroke="#ff7a18" stroke-opacity="0.75" filter="url(#shadow)"/>
-<rect x="88" y="443" width="64" height="64" rx="16" fill="#ff7a18"/>
-<image x="88" y="443" width="64" height="64" href="logos/leetcode.svg" preserveAspectRatio="xMidYMid meet"/>
+<rect x="88" y="443" width="64" height="64" rx="16" fill="#ff7a18"/><image x="88" y="443" width="64" height="64" href="logos/leetcode.svg" preserveAspectRatio="xMidYMid meet"/>
 <text x="175" y="473" class="title" font-size="29">LeetCode</text>
 <rect x="855" y="445" width="145" height="52" rx="13" fill="#ff4d4d" fill-opacity="0.28" stroke="#ff7a18" stroke-opacity="0.7"/><text x="927" y="467" text-anchor="middle" class="muted" font-size="12">SOLVED</text><text x="927" y="489" text-anchor="middle" class="title" font-size="20">1</text>
 <line x1="175" y1="517" x2="1000" y2="517" stroke="#263043"/>
 <text x="175" y="547" font-family="Arial" font-size="16" font-weight="700" fill="#4ade80">Easy 1</text><text x="335" y="547" font-family="Arial" font-size="16" font-weight="700" fill="#facc15">Medium 0</text><text x="515" y="547" font-family="Arial" font-size="16" font-weight="700" fill="#f87171">Hard 0</text><text x="670" y="547" font-family="Arial" font-size="16" font-weight="700" fill="#38bdf8">Unknown 0</text>
 <rect x="175" y="558" width="380" height="52" rx="10" fill="#111827" stroke="#263043"/><text x="193" y="581" class="muted" font-size="13">Languages</text><text x="193" y="602" class="body" font-size="17" font-weight="700">C++: 1</text>
 <rect x="575" y="558" width="425" height="52" rx="10" fill="#111827" stroke="#263043"/><text x="593" y="581" class="muted" font-size="13">Topics</text><text x="593" y="602" class="body" font-size="17" font-weight="700">Array: 1</text>
-
 <rect x="50" y="649" width="1000" height="220" rx="18" fill="#0d1117" stroke="#a855f7" stroke-opacity="0.75" filter="url(#shadow)"/>
-<rect x="88" y="687" width="64" height="64" rx="16" fill="#a855f7"/>
-<image x="88" y="687" width="64" height="64" href="logos/codechef.svg" preserveAspectRatio="xMidYMid meet"/>
+<rect x="88" y="687" width="64" height="64" rx="16" fill="#a855f7"/><image x="88" y="687" width="64" height="64" href="logos/codechef.svg" preserveAspectRatio="xMidYMid meet"/>
 <text x="175" y="717" class="title" font-size="29">CodeChef</text>
 <rect x="855" y="689" width="145" height="52" rx="13" fill="#6d28d9" fill-opacity="0.28" stroke="#a855f7" stroke-opacity="0.7"/><text x="927" y="711" text-anchor="middle" class="muted" font-size="12">SOLVED</text><text x="927" y="733" text-anchor="middle" class="title" font-size="20">7</text>
 <line x1="175" y1="761" x2="1000" y2="761" stroke="#263043"/>
 <text x="175" y="791" font-family="Arial" font-size="16" font-weight="700" fill="#4ade80">Easy 0</text><text x="335" y="791" font-family="Arial" font-size="16" font-weight="700" fill="#facc15">Medium 0</text><text x="515" y="791" font-family="Arial" font-size="16" font-weight="700" fill="#f87171">Hard 0</text><text x="670" y="791" font-family="Arial" font-size="16" font-weight="700" fill="#38bdf8">Unknown 7</text>
 <rect x="175" y="802" width="380" height="52" rx="10" fill="#111827" stroke="#263043"/><text x="193" y="825" class="muted" font-size="13">Languages</text><text x="193" y="846" class="body" font-size="17" font-weight="700">C++: 4 · PYTH 3: 3</text>
 <rect x="575" y="802" width="425" height="52" rx="10" fill="#111827" stroke="#263043"/><text x="593" y="825" class="muted" font-size="13">Topics</text><text x="593" y="846" class="body" font-size="17" font-weight="700">Other: 7</text>
-
 <rect x="50" y="893" width="1000" height="220" rx="18" fill="#0d1117" stroke="#34d399" stroke-opacity="0.75" filter="url(#shadow)"/>
-<rect x="88" y="931" width="64" height="64" rx="16" fill="#34d399"/>
-<image x="88" y="931" width="64" height="64" href="logos/hackerrank.svg" preserveAspectRatio="xMidYMid meet"/>
+<rect x="88" y="931" width="64" height="64" rx="16" fill="#34d399"/><image x="88" y="931" width="64" height="64" href="logos/hackerrank.svg" preserveAspectRatio="xMidYMid meet"/>
 <text x="175" y="961" class="title" font-size="29">HackerRank</text>
 <rect x="855" y="933" width="145" height="52" rx="13" fill="#059669" fill-opacity="0.28" stroke="#34d399" stroke-opacity="0.7"/><text x="927" y="955" text-anchor="middle" class="muted" font-size="12">SOLVED</text><text x="927" y="977" text-anchor="middle" class="title" font-size="20">7</text>
 <line x1="175" y1="1005" x2="1000" y2="1005" stroke="#263043"/>
