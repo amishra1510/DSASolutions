@@ -104,7 +104,7 @@ def logo_markup(platform: str, x: int, y: int, size: int = 64) -> str:
     if not logo_path.exists():
         raise FileNotFoundError(f"Missing platform logo: {logo_path}")
     source = logo_path.read_text(encoding="utf-8")
-    match = re.search(r'<path\\b[^>]*\\bd="([^"]+)"', source)
+    match = re.search(r'<path\b[^>]*\bd="([^"]+)"', source)
     if not match:
         raise ValueError(f"Could not find logo path in {logo_path}")
     return (
