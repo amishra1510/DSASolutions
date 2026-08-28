@@ -59,13 +59,13 @@ jobs:
       - name: Update progress dashboard
         run: python scripts/update_dashboard.py
 
-      - name: Commit dashboard
+      - name: Commit changes
         run: |
-          if git diff --quiet README.md; then
-            echo "Dashboard is already up to date."
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No changes to commit."
           else
-            git add README.md
-            git commit -m "docs: update progress dashboard"
+            git add .
+            git commit -m "sync: update DSA solutions"
             git push
           fi
 
