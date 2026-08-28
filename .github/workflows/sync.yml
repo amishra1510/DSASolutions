@@ -2,6 +2,9 @@ name: Sync DSA Solutions
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - "scripts/apply_platform_logos.py"
   schedule:
     - cron: "7,27,47 * * * *"
 
