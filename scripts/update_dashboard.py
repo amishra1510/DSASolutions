@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 from collections import Counter
 from datetime import datetime, timezone
@@ -8,11 +9,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "submissions.json"
 README = ROOT / "README.md"
+DASHBOARD_SVG = ROOT / "assets" / "dashboard.svg"
 
 PLATFORM_EMOJI = {
-    "LeetCode": "🟧",
-    "CodeChef": "🟪",
-    "HackerRank": "🟩",
+    "LeetCode": "■",
+    "CodeChef": "■",
+    "HackerRank": "■",
+}
+
+PLATFORM_ICON_COLORS = {
+    "LeetCode": "#ff6b35",
+    "CodeChef": "#8b5cf6",
+    "HackerRank": "#34d399",
 }
 
 
@@ -89,21 +97,51 @@ def difficulty_text(rows: list[dict]) -> str:
     return " · ".join(parts)
 
 
-def platform_row(platform: str, rows: list[dict]) -> list[str]:
+def platform_details(platform: str, rows: list[dict]) -> tuple[str, str, str]:
     languages = Counter(r.get("language") or "Unknown" for r in rows)
     topics = Counter((r.get("tags") or ["Other"])[0] for r in rows)
     lang_text = " · ".join(f"{k}: {v}" for k, v in languages.most_common()) or "—"
     topic_text = " · ".join(f"{k}: {v}" for k, v in topics.most_common(5)) or "—"
+    return difficulty_text(rows), lang_text, topic_text
 
-    return [
-        "<tr><td align=\"center\">",
-        f"<h2>{PLATFORM_EMOJI.get(platform, '⬜')} {platform}</h2>",
-        f"<h3>{len(rows)} solved</h3>",
-        f"<b>{difficulty_text(rows)}</b><br>",
-        f"Languages: {lang_text}<br>",
-        f"Topics: {topic_text}",
-        "</td></tr>",
+
+def svg_text(value: str) -> str:
+    return html.escape(value, quote=True)
+
+
+def write_dashboard_svg(platform_rows: dict[str, list[dict]]) -> None:
+    """Generate equal-width platform cards as SVG so GitHub's table CSS cannot resize them."""
+    width = 1000
+    card_width = 920
+    card_height = 210
+    gap = 28
+    height = len(platform_rows) * card_height + (len(platform_rows) - 1) * gap + 20
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        '<rect width="100%" height="100%" fill="#0d1117"/>',
     ]
+
+    for index, platform in enumerate(("LeetCode", "CodeChef", "HackerRank")):
+        rows = platform_rows[platform]
+        y = 10 + index * (card_height + gap)
+        difficulty, languages, topics = platform_details(platform, rows)
+        icon_color = PLATFORM_ICON_COLORS[platform]
+
+        parts.extend([
+            f'<rect x="40" y="{y}" width="{card_width}" height="{card_height}" rx="10" fill="#0d1117" stroke="#30363d"/>',
+            f'<rect x="360" y="{y + 28}" width="34" height="34" rx="6" fill="{icon_color}"/>',
+            f'<text x="410" y="{y + 56}" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700">{svg_text(platform)}</text>',
+            f'<line x1="65" y1="{y + 82}" x2="935" y2="{y + 82}" stroke="#30363d"/>',
+            f'<text x="500" y="{y + 126}" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700">{len(rows)} solved</text>',
+            f'<text x="500" y="{y + 162}" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">{svg_text(difficulty)}</text>',
+            f'<text x="500" y="{y + 188}" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="16">Languages: {svg_text(languages)}</text>',
+            f'<text x="500" y="{y + 208}" text-anchor="middle" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="15">Topics: {svg_text(topics)}</text>',
+        ])
+
+    parts.append('</svg>')
+    DASHBOARD_SVG.parent.mkdir(parents=True, exist_ok=True)
+    DASHBOARD_SVG.write_text("\n".join(parts), encoding="utf-8")
 
 
 def main() -> None:
@@ -111,6 +149,12 @@ def main() -> None:
     rows = unique_records(raw_records)
     difficulties = Counter(r.get("difficulty") for r in rows)
     current, best = streaks(rows)
+    platform_rows = {
+        platform: [r for r in rows if r.get("platform") == platform]
+        for platform in ("LeetCode", "CodeChef", "HackerRank")
+    }
+
+    write_dashboard_svg(platform_rows)
 
     lines = [
         "# DSA Solutions",
@@ -127,16 +171,7 @@ def main() -> None:
         "",
         "<h2 align=\"center\">Platforms</h2>",
         "",
-        "<table align=\"center\" width=\"100%\">",
-    ]
-
-    for platform in ("LeetCode", "CodeChef", "HackerRank"):
-        platform_rows = [r for r in rows if r.get("platform") == platform]
-        lines.extend(platform_row(platform, platform_rows))
-        lines.extend(["<tr><td height=\"18\"></td></tr>"])
-
-    lines.extend([
-        "</table>",
+        '<p align="center"><img src="assets/dashboard.svg" alt="DSA platform progress dashboard" width="100%"></p>',
         "",
         "---",
         "",
@@ -145,7 +180,7 @@ def main() -> None:
         "",
         "_This dashboard is automatically regenerated after every sync._",
         "",
-    ])
+    ]
 
     README.write_text("\n".join(lines), encoding="utf-8")
     print(f"Dashboard updated: {len(rows)} unique solved problems")
