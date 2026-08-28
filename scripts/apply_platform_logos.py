@@ -14,5 +14,15 @@ replacements = {
 text = SVG.read_text(encoding="utf-8")
 for old, new in replacements.items():
     text = text.replace(old, new)
+
+# Remove the thick left-side accent bars from the platform cards.
+accent_bars = (
+    '<rect x="51" y="406" width="7" height="218" rx="4" fill="#ff7a18"/>',
+    '<rect x="51" y="650" width="7" height="218" rx="4" fill="#a855f7"/>',
+    '<rect x="51" y="894" width="7" height="218" rx="4" fill="#34d399"/>',
+)
+for bar in accent_bars:
+    text = text.replace(bar, "")
+
 SVG.write_text(text, encoding="utf-8")
-print("Applied platform logos.")
+print("Applied platform logos and cleaned platform card accents.")
