@@ -18,7 +18,6 @@ PLATFORM_COLORS = {
     "CodeChef": ("#a855f7", "#6d28d9"),
     "HackerRank": ("#34d399", "#059669"),
 }
-
 PLATFORM_LOGOS = {
     "LeetCode": "leetcode.svg",
     "CodeChef": "codechef.svg",
@@ -41,11 +40,7 @@ def unique_records(records: dict) -> list[dict]:
     unique = {}
     for record in records.values():
         language = display_language(record.get("language"))
-        key = (
-            record.get("platform"),
-            record.get("problem_id") or record.get("slug") or record.get("title"),
-            language.lower(),
-        )
+        key = (record.get("platform"), record.get("problem_id") or record.get("slug") or record.get("title"), language.lower())
         normalized = dict(record)
         normalized["language"] = language
         unique[key] = normalized
@@ -108,8 +103,7 @@ def logo_markup(platform: str, x: int, y: int, size: int = 64) -> str:
     if not match:
         raise ValueError(f"Could not find logo path in {logo_path}")
     return (
-        f'<svg x="{x}" y="{y}" width="{size}" height="{size}" '
-        f'viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label="{esc(platform)} logo">'
+        f'<svg x="{x}" y="{y}" width="{size}" height="{size}" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label="{esc(platform)} logo">'
         f'<path fill="#ffffff" d="{esc(match.group(1))}"/></svg>'
     )
 
@@ -126,7 +120,6 @@ def write_dashboard_svg(platform_rows, total, current, best, overall):
         '<style>.title{font-family:Arial,Helvetica,sans-serif;fill:#f8fafc;font-weight:700}.muted{font-family:Arial,Helvetica,sans-serif;fill:#94a3b8}.body{font-family:Arial,Helvetica,sans-serif;fill:#e2e8f0}</style>',
         '</defs>',
         '<rect width="100%" height="100%" rx="22" fill="url(#bg)"/>',
-        '<rect x="22" y="22" width="1056" height="1140" rx="20" fill="none" stroke="#263043"/>',
         '<text x="550" y="72" text-anchor="middle" class="muted" font-size="16" letter-spacing="4">DSA PROGRESS</text>',
         f'<text x="550" y="137" text-anchor="middle" class="title" font-size="54">{total} <tspan fill="#94a3b8" font-size="30">Problems Solved</tspan></text>',
         '<rect x="95" y="165" width="910" height="76" rx="14" fill="url(#summary)" stroke="#2b3547"/>',
